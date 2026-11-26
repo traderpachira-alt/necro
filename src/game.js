@@ -624,8 +624,10 @@ export class GameScene extends Phaser.Scene {
       if (taunts.length) return taunts.reduce((a, b) => (Math.hypot(a.x - u.x, a.y - u.y) < Math.hypot(b.x - u.x, b.y - u.y) ? a : b));
     }
     for (const o of foes) {
-      if (o.x > W + 5 && u.team === 'ally') continue;
-      const d = Math.abs(o.x - u.x) + Math.abs(o.y - u.y) * 1.5;
+      if (o.x > W - 10 && u.team === 'ally') continue;
+      // stationary shooters prefer anything already inside their range
+      const inRange = Math.hypot(o.x - u.x, (o.y - u.y) * 1.6) <= u.range + o.radius;
+      const d = Math.abs(o.x - u.x) + Math.abs(o.y - u.y) * 1.5 - (u.speed === 0 && inRange ? 10000 : 0);
       if (d < bd) { bd = d; best = o; }
     }
     return best;

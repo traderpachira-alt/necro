@@ -3,6 +3,7 @@ import { RARITIES } from './data.js';
 import { sfx } from './audio.js';
 
 const ORIGIN_Y = 44 / 48;
+const ENEMY_MAX_X = 490; // right-most x an enemy may attack from (fully on screen)
 let UID = 1;
 
 export class Unit {
@@ -113,10 +114,13 @@ export class Unit {
     const dx = target.x - this.x, dy = target.y - this.y;
     const d = Math.hypot(dx, dy * 1.6);
     const reach = this.range + target.radius;
-    if (d > reach && this.speed > 0) {
+    // enemies must step fully onto the visible battlefield before they may stop and attack
+    const offscreen = this.team === 'enemy' && this.x > ENEMY_MAX_X;
+    if ((d > reach || offscreen) && this.speed > 0) {
       const step = this.speed * dt;
       let vx = (dx / d) * step, vy = (dy / Math.max(1, Math.hypot(dx, dy))) * step * 0.8;
       if (Math.abs(dx) < reach * 0.5 && Math.abs(dy) > 10) vx *= 0.3;
+      if (offscreen && d <= reach) { vx = -step; vy = 0; }
       // separation
       for (const o of game.units) {
         if (o === this || o.dead || o.team !== this.team) continue;
