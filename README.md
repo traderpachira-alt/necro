@@ -22,4 +22,4 @@ Ardından tarayıcıda `http://localhost:8000` adresini açın. GitHub Pages üz
 
 - [Phaser 3](https://phaser.io) (`lib/phaser.min.js`, MIT)
 - Tüm sprite'lar, normal map'ler (dinamik ışık için), kart tasarımları ve sesler kodla üretilir.
-- Yazı tipi: Pixelify Sans (`fonts/`, SIL Open Font License)
+- Yazı tipleri: Cinzel (başlıklar) ve Nunito (metinler), `fonts/`, SIL Open Font License

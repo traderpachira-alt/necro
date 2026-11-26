@@ -2,7 +2,8 @@
 import { RARITIES, CREATURES, RITUALS, CURSES, ROLES } from './data.js';
 
 export const CARD_W = 200, CARD_H = 290; // texture size; displayed at 0.5
-const FONT = "'Pixelify', 'Courier New', monospace";
+import { TITLE, BODY } from './fonts.js';
+const FONT = BODY;
 
 function rr(c, x, y, w, h, r) {
   c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
@@ -33,7 +34,7 @@ function cornerSkulls(c, col) {
     c.fillStyle = col; c.fillRect(x - 3, y - 1, 1, 1); c.fillRect(x + 2, y - 1, 1, 1);
   }
 }
-function title(c, text, y, col, size = 17) {
+function title(c, text, y, col, size = 20) {
   c.save();
   // banner ribbon
   const w = CARD_W - 30;
@@ -43,8 +44,8 @@ function title(c, text, y, col, size = 17) {
   g.addColorStop(0, lighten(col, 0.15)); g.addColorStop(0.5, darken(col, 0.35)); g.addColorStop(1, darken(col, 0.65));
   c.fillStyle = g; c.beginPath();
   c.moveTo(13, y - 12); c.lineTo(12 + w, y - 12); c.lineTo(CARD_W - 10, y); c.lineTo(12 + w, y + 12); c.lineTo(13, y + 12); c.lineTo(10, y); c.closePath(); c.fill();
-  c.font = `700 ${size}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
-  let s = size; while (c.measureText(text).width > w - 14 && s > 10) { s--; c.font = `700 ${s}px ${FONT}`; }
+  c.font = `900 ${size}px ${TITLE}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  let s = size; while (c.measureText(text).width > w - 12 && s > 11) { s--; c.font = `900 ${s}px ${TITLE}`; }
   c.fillStyle = '#05030a'; c.fillText(text, CARD_W / 2 + 1, y + 2);
   c.fillStyle = '#fff8e8'; c.fillText(text, CARD_W / 2, y);
   c.restore();
@@ -86,7 +87,7 @@ function statBox(c, x, y, icon, val, col) {
   c.fillStyle = col;
   if (icon === 'hp') { const cx = x + 15, cy = y + 13; c.beginPath(); c.arc(cx - 4, cy - 2, 5, 0, Math.PI * 2); c.arc(cx + 4, cy - 2, 5, 0, Math.PI * 2); c.fill(); c.beginPath(); c.moveTo(cx - 9, cy); c.lineTo(cx + 9, cy); c.lineTo(cx, cy + 9); c.fill(); }
   else { const cx = x + 15, cy = y + 14; c.save(); c.translate(cx, cy); c.rotate(-0.78); c.fillRect(-2, -10, 4, 15); c.fillRect(-6, 4, 12, 3); c.fillRect(-1.5, 7, 3, 4); c.restore(); }
-  c.font = `700 17px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff8e8';
+  c.font = `800 21px ${BODY}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff8e8';
   c.fillText(String(val), x + 50, y + 15);
   c.restore();
 }
@@ -155,9 +156,9 @@ export function drawCreatureCard(id, rarity, portrait, level = 1) {
   c.restore();
   roleIcon(c, C.role, 32, 40, R.color);
   gem(c, CARD_W - 32, 40, R.color);
-  title(c, C.name, 190, R.color, 17);
-  c.font = `400 13px ${FONT}`; c.textAlign = 'center'; c.fillStyle = R.color;
-  c.fillText(`${R.name} • ${ROLES[C.role].name}`, CARD_W / 2, 216);
+  title(c, C.name, 190, R.color, 20);
+  c.font = `800 15px ${BODY}`; c.textAlign = 'center'; c.fillStyle = R.color;
+  c.fillText(`${R.name} • ${ROLES[C.role].name}`, CARD_W / 2, 217);
   const hp = Math.round(C.hp * R.mult), atk = Math.round(C.atk * R.mult);
   statBox(c, 18, 232, 'hp', hp, '#e2445a');
   statBox(c, CARD_W - 96, 232, 'atk', atk, '#f0b44a');
@@ -184,11 +185,14 @@ export function drawSpellCard(kind, id) {
     for (const [dx, len] of [[20, 18], [46, 30], [100, 14], [130, 24]]) { c.fillRect(win.x + dx, win.y, 4, len); c.beginPath(); c.arc(win.x + dx + 2, win.y + len, 3.5, 0, Math.PI * 2); c.fill(); }
   }
   c.restore();
-  title(c, D.name, 190, col, 17);
-  c.font = `400 13px ${FONT}`; c.textAlign = 'center'; c.fillStyle = isCurse ? '#ff8a80' : '#c8b0ff';
-  c.fillText(isCurse ? 'LANET' : 'RİTÜEL', CARD_W / 2, 214);
-  c.font = `400 13px ${FONT}`; c.fillStyle = '#e8e0f0';
-  wrap(c, D.desc, CARD_W / 2, 234, CARD_W - 40, 15);
+  title(c, D.name, 190, col, 20);
+  c.save();
+  c.font = `900 22px ${TITLE}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.shadowColor = col; c.shadowBlur = 12; c.fillStyle = isCurse ? '#ff9a90' : '#d8c4ff';
+  c.fillText(isCurse ? 'LANET' : 'RİTÜEL', CARD_W / 2, 238);
+  c.restore();
+  c.fillStyle = col;
+  for (const dx of [-52, 52]) { c.beginPath(); c.moveTo(CARD_W / 2 + dx, 232); c.lineTo(CARD_W / 2 + dx + 6, 238); c.lineTo(CARD_W / 2 + dx, 244); c.lineTo(CARD_W / 2 + dx - 6, 238); c.fill(); }
   cornerSkulls(c, col);
   return cv;
 }

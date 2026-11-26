@@ -3,24 +3,30 @@ import { Unit } from './unit.js';
 import { Hand, cardColor, cardTitle, HAND_Y } from './hand.js';
 import { CREATURES, ENEMIES, NECRO, RITUALS, CURSES, RARITIES, ROLES, CONFIG, randomCard, waveComposition, rollRarity } from './data.js';
 import { sfx, unlockAudio, toggleMute, isMuted } from './audio.js';
+import { TITLE, BODY, ZOOM } from './fonts.js';
 
 const W = 540, H = 960, PANEL_Y = 570;
-const FONT = "'Pixelify', 'Courier New', monospace";
+
 const SLOT_COLS = [150, 218, 286];
 const SLOT_ROWS = [438, 510];
 const NECRO_POS = { x: 70, y: 476 };
 
 function txt(scene, x, y, s, size, color = '#f2e8ff', extra = {}) {
-  return scene.add.text(x, y, s, { fontFamily: FONT, fontSize: size + 'px', color, stroke: '#05030a', strokeThickness: Math.max(3, size / 5), ...extra });
+  const { title, ...rest } = extra;
+  return scene.add.text(x, y, s, {
+    fontFamily: title ? TITLE : BODY, fontStyle: title ? '900' : '800', fontSize: size + 'px', color,
+    stroke: '#05030a', strokeThickness: Math.max(3, Math.round(size / 6)), resolution: ZOOM, ...rest,
+  });
 }
+const T = { title: true };
 
 class Button {
   constructor(scene, x, y, w, h, label, color, onClick) {
     this.scene = scene; this.w = w; this.h = h; this.color = color; this.enabled = true;
     this.c = scene.add.container(x, y).setDepth(1500);
     this.g = scene.add.graphics();
-    this.t = txt(scene, 0, 0, label, 20, '#fff8e8').setOrigin(0.5);
-    this.sub = txt(scene, 0, 13, '', 13, '#d8c8ff').setOrigin(0.5).setVisible(false);
+    this.t = txt(scene, 0, 0, label, 21, '#fff8e8', T).setOrigin(0.5);
+    this.sub = txt(scene, 0, 14, '', 15, '#e8dcff').setOrigin(0.5).setVisible(false);
     this.c.add([this.g, this.t, this.sub]);
     this.c.setSize(w, h).setInteractive({ useHandCursor: true });
     this.c.on('pointerdown', () => { if (!this.enabled) { sfx.error(); return; } this.c.setScale(0.94); });
@@ -39,7 +45,7 @@ class Button {
   }
   set(label, sub) {
     this.t.setText(label);
-    if (sub) { this.sub.setText(sub).setVisible(true); this.t.setY(-7); } else { this.sub.setVisible(false); this.t.setY(-2); }
+    if (sub) { this.sub.setText(sub).setVisible(true); this.t.setY(-9); } else { this.sub.setVisible(false); this.t.setY(-2); }
     return this;
   }
   setEnabled(v) { this.enabled = v; this.draw(); return this; }
@@ -58,6 +64,7 @@ export class GameScene extends Phaser.Scene {
     this.speedMul = 1;
     this.tweens.timeScale = 1; this.time.timeScale = 1; this.anims.globalTimeScale = 1;
 
+    this.cameras.main.setZoom(ZOOM).centerOn(W / 2, H / 2);
     this.buildWorld();
     this.buildFx();
     this.buildUI();
@@ -119,35 +126,35 @@ export class GameScene extends Phaser.Scene {
     this.add.image(0, PANEL_Y, 'panel').setOrigin(0).setDepth(1000);
     // top HUD
     const hud = this.add.graphics().setDepth(1400);
-    hud.fillStyle(0x05030a, 0.75).fillRect(0, 0, W, 54);
-    hud.fillStyle(0x9b7bd8, 0.6).fillRect(0, 54, W, 2);
-    this.waveText = txt(this, 14, 8, 'DALGA 1', 22).setDepth(1401);
-    this.phaseText = txt(this, 14, 33, 'Hazırlık', 13, '#b8a8d8').setDepth(1401);
-    this.add.image(222, 26, 'skull_icon').setDepth(1401).setScale(1.2);
-    this.scoreText = txt(this, 238, 14, '0', 22, '#f2e8ff').setDepth(1401);
-    this.soulIcon = this.add.image(372, 27, 'soul_icon').setDepth(1401).setScale(1.2);
-    this.soulText = txt(this, 390, 14, String(this.souls), 22, '#9dff8a').setDepth(1401);
-    this.muteBtn = txt(this, 512, 27, isMuted() ? '🔇' : '🔊', 20).setOrigin(0.5).setDepth(1401).setInteractive({ useHandCursor: true });
+    hud.fillStyle(0x05030a, 0.75).fillRect(0, 0, W, 64);
+    hud.fillStyle(0x9b7bd8, 0.6).fillRect(0, 64, W, 2);
+    this.waveText = txt(this, 14, 4, 'DALGA 1', 26, '#f2e8ff', T).setDepth(1401);
+    this.phaseText = txt(this, 15, 37, 'Hazırlık', 16, '#c8b8e8').setDepth(1401);
+    this.add.image(214, 32, 'skull_icon').setDepth(1401).setScale(1.5);
+    this.scoreText = txt(this, 232, 15, '0', 26, '#f2e8ff').setDepth(1401);
+    this.soulIcon = this.add.image(364, 32, 'soul_icon').setDepth(1401).setScale(1.5);
+    this.soulText = txt(this, 384, 15, String(this.souls), 26, '#9dff8a').setDepth(1401);
+    this.muteBtn = txt(this, 510, 32, isMuted() ? '🔇' : '🔊', 24).setOrigin(0.5).setDepth(1401).setInteractive({ useHandCursor: true });
     this.muteBtn.on('pointerup', () => { this.muteBtn.setText(toggleMute() ? '🔇' : '🔊'); });
 
     // info box
     this.infoG = this.add.graphics().setDepth(1001);
-    this.infoG.fillStyle(0x05030a, 0.7).fillRoundedRect(12, 588, W - 24, 64, 10);
-    this.infoG.lineStyle(2, 0x3a2a50, 1).strokeRoundedRect(12, 588, W - 24, 64, 10);
-    this.infoTitle = txt(this, 26, 596, '', 17, '#fff2d0').setDepth(1002);
-    this.infoBody = txt(this, 26, 619, '', 13, '#c8b8e8', { wordWrap: { width: W - 56 } }).setDepth(1002);
+    this.infoG.fillStyle(0x05030a, 0.7).fillRoundedRect(10, 584, W - 20, 88, 10);
+    this.infoG.lineStyle(2, 0x3a2a50, 1).strokeRoundedRect(10, 584, W - 20, 88, 10);
+    this.infoTitle = txt(this, 22, 590, '', 21, '#fff2d0', T).setDepth(1002);
+    this.infoBody = txt(this, 22, 619, '', 17, '#ddd0f4', { wordWrap: { width: W - 44 }, lineSpacing: -2 }).setDepth(1002);
 
     // deck pile
-    for (let i = 3; i >= 0; i--) this.add.image(52 + i * 2, 900 - i * 2, 'card_back').setScale(0.3).setDepth(1001).setAlpha(1 - i * 0.15);
-    this.deckText = txt(this, 52, 948, 'Deste', 12, '#9b7bd8').setOrigin(0.5).setDepth(1002);
+    for (let i = 3; i >= 0; i--) this.add.image(50 + i * 2, 908 - i * 2, 'card_back').setScale(0.3).setDepth(1001).setAlpha(1 - i * 0.15);
+    this.deckText = txt(this, 52, 952, 'Deste', 13, '#b89be8').setOrigin(0.5).setDepth(1002);
 
-    this.btnDraw = new Button(this, 210, 902, 168, 58, 'KART ÇEK', 0x5a3a9a, () => this.buyCard());
-    this.btnStart = new Button(this, 406, 902, 200, 58, 'SAVAŞA BAŞLA', 0x2f8a4a, () => this.startBattle());
-    this.btnA = new Button(this, 210, 902, 168, 58, '', 0x5a3a9a, () => this.cardActionA()).show(false);
-    this.btnB = new Button(this, 406, 902, 200, 58, '', 0x2f8a4a, () => this.cardActionB()).show(false);
-    this.btnSpeed = new Button(this, 406, 902, 200, 58, 'HIZ x1', 0x6a4a2a, () => this.toggleSpeed()).show(false);
+    this.btnDraw = new Button(this, 212, 912, 172, 62, 'KART ÇEK', 0x5a3a9a, () => this.buyCard());
+    this.btnStart = new Button(this, 408, 912, 200, 62, 'SAVAŞA BAŞLA', 0x2f8a4a, () => this.startBattle());
+    this.btnA = new Button(this, 212, 912, 172, 62, '', 0x5a3a9a, () => this.cardActionA()).show(false);
+    this.btnB = new Button(this, 408, 912, 200, 62, '', 0x2f8a4a, () => this.cardActionB()).show(false);
+    this.btnSpeed = new Button(this, 408, 912, 200, 62, 'HIZ x1', 0x6a4a2a, () => this.toggleSpeed()).show(false);
 
-    this.unitCountText = txt(this, W - 18, PANEL_Y - 26, '', 14, '#c8b8e8').setOrigin(1, 0).setDepth(1001);
+    this.unitCountText = txt(this, W - 14, PANEL_Y - 30, '', 17, '#ddd0f4').setOrigin(1, 0).setDepth(1001);
 
     // tapping empty panel space deselects
     this.input.on('pointerdown', (p, objs) => { if (!objs.length && this.hand.selected) this.select(null); });
@@ -168,15 +175,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   banner(text, color = '#f2e8ff', sub = '') {
-    const t = txt(this, W / 2, 210, text, 40, color).setOrigin(0.5).setDepth(1450).setScale(0.4).setAlpha(0);
-    const s = sub ? txt(this, W / 2, 252, sub, 16, '#c8b8e8').setOrigin(0.5).setDepth(1450).setAlpha(0) : null;
+    const t = txt(this, W / 2, 205, text, 42, color, T).setOrigin(0.5).setDepth(1450).setScale(0.4).setAlpha(0);
+    const s = sub ? txt(this, W / 2, 252, sub, 20, '#ddd0f4').setOrigin(0.5).setDepth(1450).setAlpha(0) : null;
     this.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 300, ease: 'Back.easeOut' });
     if (s) this.tweens.add({ targets: s, alpha: 1, duration: 300, delay: 150 });
     this.tweens.add({ targets: [t, s].filter(Boolean), alpha: 0, y: '-=20', delay: 1500, duration: 400, onComplete: () => { t.destroy(); s?.destroy(); } });
   }
 
   floatText(x, y, s, color, size = 16) {
-    const t = txt(this, x, y, s, size, color).setOrigin(0.5).setDepth(1350);
+    const t = txt(this, x, y, s, Math.round(size * 1.25), color).setOrigin(0.5).setDepth(1350);
     this.tweens.add({ targets: t, y: y - 34, duration: 750, ease: 'Cubic.easeOut' });
     this.tweens.add({ targets: t, alpha: 0, delay: 450, duration: 300, onComplete: () => t.destroy() });
   }
@@ -188,8 +195,8 @@ export class GameScene extends Phaser.Scene {
       const o = this.add.image(fromX, fromY, 'soft').setTint(0x7dff6a).setBlendMode(Phaser.BlendModes.ADD).setScale(0.7).setDepth(1420);
       const share = i === orbs - 1 ? n - Math.floor(n / orbs) * (orbs - 1) : Math.floor(n / orbs);
       this.tweens.add({
-        targets: o, x: { value: 372, ease: 'Sine.easeIn' }, y: { value: 27, ease: 'Back.easeIn' }, scale: 0.3, delay: i * 60, duration: 650,
-        onComplete: () => { o.destroy(); this.souls += share; sfx.soul(); this.updateHUD(); this.tweens.add({ targets: this.soulIcon, scale: { from: 1.6, to: 1.2 }, duration: 150 }); },
+        targets: o, x: { value: 364, ease: 'Sine.easeIn' }, y: { value: 32, ease: 'Back.easeIn' }, scale: 0.3, delay: i * 60, duration: 650,
+        onComplete: () => { o.destroy(); this.souls += share; sfx.soul(); this.updateHUD(); this.tweens.add({ targets: this.soulIcon, scale: { from: 2, to: 1.5 }, duration: 150 }); },
       });
     }
   }
@@ -226,14 +233,14 @@ export class GameScene extends Phaser.Scene {
       if (!v.revealed) { v.reveal(); this.select(null); return; }
       this.select(this.hand.selected === v ? null : v);
     });
-    this.input.on('gameobjectmove', (p, obj) => { const v = viewOf(obj); if (v && v.revealed && !v.dragging && !v.busy && this.state === 'prep') v.tilt(p.x); });
+    this.input.on('gameobjectmove', (p, obj) => { const v = viewOf(obj); if (v && v.revealed && !v.dragging && !v.busy && this.state === 'prep') v.tilt(p.worldX); });
     this.input.on('gameobjectout', (p, obj) => { const v = viewOf(obj); if (v && !v.dragging && !v.busy) { obj.angle = v.trot; obj.scaleX = v.tscale; } });
   }
 
   dropHint(on, v) {
     if (!this.dropZone) {
       this.dropZone = this.add.graphics().setDepth(1340);
-      this.dropText = txt(this, W / 2, 330, '', 20, '#fff2d0').setOrigin(0.5).setDepth(1341);
+      this.dropText = txt(this, W / 2, 330, '', 24, '#fff2d0', T).setOrigin(0.5).setDepth(1341);
     }
     this.dropZone.clear(); this.dropText.setText('');
     if (!on) return;
@@ -354,7 +361,7 @@ export class GameScene extends Phaser.Scene {
     sfx.legendary();
     const dark = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0).setDepth(1290);
     const rays = this.add.image(v.c.x, v.c.y, 'rays').setTint(0xffd36a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1291).setScale(0.2).setAlpha(0.9);
-    const t = txt(this, W / 2, 520, 'EFSANEVİ!', 46, '#ffd36a').setOrigin(0.5).setDepth(1460).setScale(0.2);
+    const t = txt(this, W / 2, 520, 'EFSANEVİ!', 50, '#ffd36a', T).setOrigin(0.5).setDepth(1460).setScale(0.2);
     this.tweens.add({ targets: dark, fillAlpha: 0.55, duration: 200, yoyo: true, hold: 900 });
     this.tweens.add({ targets: rays, scale: 2.4, angle: 90, alpha: 0, duration: 1600, ease: 'Cubic.easeOut', onComplete: () => rays.destroy() });
     this.tweens.add({ targets: t, scale: 1, duration: 400, ease: 'Back.easeOut' });
@@ -595,12 +602,12 @@ export class GameScene extends Phaser.Scene {
       const o = this.add.rectangle(W / 2, H / 2, W, H, 0x05030a, 0).setDepth(2000).setInteractive();
       this.tweens.add({ targets: o, fillAlpha: 0.85, duration: 600 });
       const els = [
-        txt(this, W / 2, 300, 'NECROMANCER', 40, '#9b7bd8').setOrigin(0.5),
-        txt(this, W / 2, 350, 'TOPRAĞA DÖNDÜ', 30, '#ff6a6a').setOrigin(0.5),
-        txt(this, W / 2, 430, `Ulaşılan dalga: ${this.wave}`, 22).setOrigin(0.5),
-        txt(this, W / 2, 465, `Skor: ${this.score}`, 22, '#ffd36a').setOrigin(0.5),
-        txt(this, W / 2, 500, `En iyi skor: ${best}`, 18, '#b8a8d8').setOrigin(0.5),
-        txt(this, W / 2, 530, `Öldürülen: ${this.kills}`, 18, '#b8a8d8').setOrigin(0.5),
+        txt(this, W / 2, 300, 'NECROMANCER', 42, '#9b7bd8', T).setOrigin(0.5),
+        txt(this, W / 2, 352, 'TOPRAĞA DÖNDÜ', 32, '#ff6a6a', T).setOrigin(0.5),
+        txt(this, W / 2, 430, `Ulaşılan dalga: ${this.wave}`, 26).setOrigin(0.5),
+        txt(this, W / 2, 468, `Skor: ${this.score}`, 26, '#ffd36a').setOrigin(0.5),
+        txt(this, W / 2, 508, `En iyi skor: ${best}`, 21, '#b8a8d8').setOrigin(0.5),
+        txt(this, W / 2, 542, `Öldürülen: ${this.kills}`, 21, '#b8a8d8').setOrigin(0.5),
       ];
       els.forEach((e, i) => { e.setDepth(2001).setAlpha(0); this.tweens.add({ targets: e, alpha: 1, delay: 300 + i * 120, duration: 400 }); });
       const b = new Button(this, W / 2, 630, 260, 64, 'YENİDEN DİRİL', 0x5a3a9a, () => this.scene.restart());
@@ -696,7 +703,7 @@ export class GameScene extends Phaser.Scene {
     const img = this.add.image(x, y, conf.tex).setScale(conf.scale).setDepth(945);
     if (conf.tint) img.setTint(conf.tint).setBlendMode(Phaser.BlendModes.ADD);
     let light = null;
-    if (conf.light && this.lightsOn && this.lights.lights.length < 14) light = this.lights.addLight(x, y, 110, conf.light, 1.3);
+    if (conf.light && this.lightsOn && this.lights.lights.length < 8) light = this.lights.addLight(x, y, 110, conf.light, 1.3);
     if (type === 'arrow') sfx.arrow(); else if (type === 'bolt') sfx.bolt(); else if (type === 'holy') sfx.holy();
     this.projectiles.push({ img, light, target, val, isHeal, crit, src, speed: conf.speed, trail: conf.trail, type, tx: target.x, ty: target.y - 40 });
   }

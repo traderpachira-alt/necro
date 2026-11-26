@@ -5,8 +5,8 @@ import { PORTRAITS } from './boot.js';
 import { sfx } from './audio.js';
 
 const S = 0.5; // texture -> display scale
-export const HAND_Y = 768;
-const DECK = { x: 52, y: 900 };
+export const HAND_Y = 790;
+const DECK = { x: 52, y: 908 };
 
 function faceKey(scene, card) {
   const key = card.kind === 'creature' ? `cf_${card.id}_${card.rarity}` : `cf_${card.kind}_${card.id}`;
