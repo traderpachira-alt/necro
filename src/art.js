@@ -201,7 +201,7 @@ function humanoid(p, c, ps, f) {
   if (c.pauldron) { p.ball(cx - 3, sh + 1, 3, 2.5, c.pauldron); p.ball(cx + 3, sh + 1, 3, 2.5, c.pauldron); }
   // shield (held on back arm, drawn in front of body)
   if (c.shield) shield(p, cx + 6, sh + 8 + ps.bob * 0, c.shield, c.emblem, c.kite);
-  HEADS[c.head](p, cx + 1, sh - 5, f);
+  HEADS[c.head](p, cx + 1, sh - 5, f, c.eye);
   // front arm + weapon
   if (c.weapon === 'bow') {
     const hand = arm(p, cx + 3, sh + 2, -0.05, 9, c.sleeve || c.body, c.hand || PAL.skin);
@@ -250,14 +250,24 @@ function humanoid(p, c, ps, f) {
 }
 
 // ---------- custom bodies ----------
-function golem(p, i) {
+function golem(p, i, o = {}) {
   const [anim, f] = animOf(i);
   let bob = 0, ff = 2, fb = -3, lf = 0, lb = 0, aF = 1.4, raise = 0, lean = 0;
   if (anim === 'idle') bob = [0, 0, 1, 1][f];
   if (anim === 'walk') { bob = [0, -1, 0, -1][f]; ff = [4, 1, -2, 1][f]; fb = [-4, -1, 2, -1][f]; lf = [0, 1, 0, 0][f]; lb = [0, 0, 0, 1][f]; }
   if (anim === 'attack') { raise = [1, 1.2, 0, 0.2][f]; lean = [-1, -2, 3, 1][f]; bob = [0, -1, 2, 1][f]; }
   const cx = 21 + lean, hip = 33 + bob, sh = 17 + bob;
-  const F = PAL.flesh;
+  const F = o.pal || PAL.flesh;
+  if (o.catapult) {
+    // bone catapult strapped to the back; arm swings forward on attack
+    const sw = anim === 'attack' ? [-0.2, -0.5, 1.2, 0.8][f] : 0;
+    const ax = cx - 8, ay = sh + 4, len = 16, a = -1.9 + sw;
+    p.line(ax, ay + 6, ax - 4, ay - 2, PAL.wood[1], 2);
+    p.line(ax, ay, ax + Math.cos(a) * len, ay + Math.sin(a) * len, PAL.bone[1], 2);
+    const bx = ax + Math.cos(a) * len, by = ay + Math.sin(a) * len;
+    p.ball(bx, by, 3, 2.5, PAL.wood);
+    if (anim !== 'attack' || f < 2) p.ball(bx, by - 2, 2.5, 2.5, PAL.bone);
+  }
   leg(p, cx - 4, hip, cx - 4 + fb, lb, F, PAL.leather);
   leg(p, cx + 3, hip, cx + 4 + ff, lf, F, PAL.leather);
   // back arm
@@ -275,8 +285,10 @@ function golem(p, i) {
   p.line(cx - 7, sh - 1, cx - 9, sh - 5, PAL.bone[1], 2); p.line(cx - 3, sh - 2, cx - 4, sh - 6, PAL.bone[2], 2);
   p.rect(cx - 2, hip - 2, 9, 2, PAL.leather[1]);
   // head sunk into shoulders
-  p.ball(cx + 5, sh - 1, 3.5, 3, PAL.flesh);
-  p.glow(cx + 7, sh - 1, '#ffb340'); p.halo(cx + 7, sh - 1, 2, '#ff9020', 80);
+  p.ball(cx + 5, sh - 1, 3.5, 3, F);
+  const eye = o.eye || '#ffb340';
+  p.glow(cx + 7, sh - 1, eye); p.halo(cx + 7, sh - 1, 2, eye, 80);
+  if (o.blood) { p.px(cx - 2, sh + 6, PAL.blood[1]); p.px(cx - 1, sh + 7, PAL.blood[2]); p.px(cx + 6, sh + 12, PAL.blood[1]); p.rect(cx - 5, hip - 3, 3, 2, PAL.blood[0]); }
   p.line(cx + 4, sh + 1, cx + 8, sh + 1, '#2a1a22');
   // front arm with big fist
   const fA = raise > 0.9 ? -1.4 : raise > 0 ? -0.8 : anim === 'attack' && f === 2 ? 0.9 : aF;
@@ -286,9 +298,10 @@ function golem(p, i) {
   if (anim === 'attack' && f === 2) { for (let k = 0; k < 7; k++) p.halo(h[0] + 2, 44, 4, '#c8a070', 60); }
 }
 
-function wolf(p, i) {
+function wolf(p, i, o = {}) {
   const [anim, f] = animOf(i);
-  const G = PAL.ghost;
+  const G = o.pal || PAL.ghost;
+  const EYE = o.eye || '#9ff7ff';
   let bob = 0, lunge = 0, jaw = 0, run = 0;
   if (anim === 'idle') bob = [0, 0, 1, 1][f];
   if (anim === 'walk') { run = f; bob = [0, -2, 0, -1][f]; }
@@ -322,9 +335,9 @@ function wolf(p, i) {
   p.poly([[hx - 3, hy - 2], [hx - 1, hy - 8], [hx + 1, hy - 3]], G[1]);
   p.poly([[hx - 1, hy - 2], [hx + 2, hy - 7], [hx + 3, hy - 2]], G[2]);
   p.px(hx + 8, hy, '#1a2a3a');
-  p.glow(hx + 2, hy - 1, '#ffffff'); p.glow(hx + 3, hy - 1, '#9ff7ff'); p.halo(hx + 3, hy - 1, 3, '#6ff7ff', 100);
+  p.glow(hx + 2, hy - 1, '#ffffff'); p.glow(hx + 3, hy - 1, EYE); p.halo(hx + 3, hy - 1, 3, EYE, 100);
   // ghost glow on body edge
-  for (let k = 0; k < 6; k++) p.softGlow(cx - 6 + k * 3, by - 7, '#5fd8ff', 60);
+  for (let k = 0; k < 6; k++) p.softGlow(cx - 6 + k * 3, by - 7, o.aura || '#5fd8ff', 60);
 }
 
 function banshee(p, i) {
@@ -376,20 +389,44 @@ const HUMANOIDS = {
   knight: { head: 'helmet', body: PAL.steel, legs: PAL.darkSteel, boots: PAL.steel, hand: PAL.steel, sleeve: PAL.steel, weapon: 'sword', shield: PAL.white, emblem: PAL.gold, kite: true, pauldron: PAL.steel, belt: PAL.gold, cape: PAL.white },
   crusader: { head: 'greathelm', body: PAL.darkSteel, legs: PAL.darkSteel, boots: PAL.steel, hand: PAL.steel, sleeve: PAL.steel, weapon: 'sword', tabard: PAL.red, belt: PAL.leather, cape: PAL.red },
   priest: { head: 'priest', body: PAL.white, robe: true, trim: PAL.gold, weapon: 'staff', staffTop: 'cross', hand: PAL.skin, sleeve: PAL.white, staffWood: '#c8a040', staffWoodHi: '#ffe48a' },
+  screamer: { head: 'skull', eye: '#7affd8', body: ['#24506e', '#5fb8d8', '#c4f2ff'], legs: PAL.ghost, boots: PAL.ghost, hand: PAL.bone, sleeve: PAL.ghost, weapon: 'bow', ribs: true, cape: ['#1a3a4a', '#4a90a8', '#9ae0f0'] },
   inquisitor: { head: 'inquisitor', body: PAL.black, robe: true, trim: PAL.red, cape: PAL.red, weapon: 'greatsword', hand: PAL.leather, sleeve: PAL.black, pauldron: PAL.steel, wide: true },
 };
 
-export const SPRITE_KEYS = ['necro', 'guard', 'golem', 'butcher', 'wolf', 'archer', 'banshee', 'knight', 'crusader', 'priest', 'inquisitor'];
+export const SPRITE_KEYS = ['necro', 'guard', 'golem', 'butcher', 'wolf', 'archer', 'banshee', 'cavalry', 'giant', 'screamer', 'hound', 'catapult', 'knight', 'crusader', 'priest', 'inquisitor'];
+
+// copy the opaque pixels of `src` (rows < maxRow) onto `dst`, shifted by (dx, dy)
+function overlay(dst, src, dx, dy, maxRow) {
+  for (let y = 0; y < Math.min(maxRow, src.h); y++) for (let x = 0; x < src.w; x++) {
+    const i = (y * src.w + x) * 4;
+    const tx = x + dx, ty = y + dy;
+    if (tx < 0 || ty < 0 || tx >= dst.w || ty >= dst.h) continue;
+    const j = (ty * dst.w + tx) * 4;
+    if (src.c[i + 3] > 0) { for (let k = 0; k < 4; k++) dst.c[j + k] = src.c[i + k]; dst.flat[ty * dst.w + tx] = src.flat[y * src.w + x]; }
+    if (src.g[i + 3] > 0) for (let k = 0; k < 4; k++) dst.g[j + k] = src.g[i + k];
+  }
+}
 
 export function buildFrames(key) {
   const out = [];
   for (let i = 0; i < FRAMES; i++) {
-    const p = new Painter(48, 48);
-    if (key === 'golem') golem(p, i);
-    else if (key === 'wolf') wolf(p, i);
-    else if (key === 'banshee') banshee(p, i);
-    else { const [anim, f] = animOf(i); humanoid(p, HUMANOIDS[key], posesHumanoid(anim, f), f); }
-    out.push(p.finalize());
+    out.push(rawFrame(key, i).finalize());
   }
   return out;
+}
+
+function rawFrame(key, i) {
+  const p = new Painter(48, 48);
+  if (key === 'golem') golem(p, i);
+  else if (key === 'giant') golem(p, i, { pal: ['#3a4a2a', '#6a7d48', '#9aac74'], eye: '#ff4030', blood: true });
+  else if (key === 'catapult') golem(p, i, { pal: ['#4a4440', '#8a8070', '#b8ac98'], eye: '#6ff7ff', catapult: true });
+  else if (key === 'wolf') wolf(p, i);
+  else if (key === 'hound') wolf(p, i, { pal: ['#1e4a3a', '#3fd8a0', '#c0ffe8'], eye: '#b8ffd0', aura: '#4affb0' });
+  else if (key === 'cavalry') {
+    wolf(p, i, { pal: ['#3a3446', '#8a8098', '#cfc6dc'], eye: '#6ff7ff' });
+    const rider = rawFrame('guard', i < 8 ? i % 4 : i);
+    overlay(p, rider, -4, -10, 32);
+  } else if (key === 'banshee') banshee(p, i);
+  else { const [anim, f] = animOf(i); humanoid(p, HUMANOIDS[key], posesHumanoid(anim, f), f); }
+  return p;
 }

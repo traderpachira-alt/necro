@@ -2,11 +2,13 @@
 import { buildFrames, SPRITE_KEYS } from './art.js';
 import { registerSheet, lumNormal } from './pixel.js';
 import { paintBackground, paintPanel } from './background.js';
+import { H, PANEL_Y } from './layout.js';
 import { drawCardBack, drawCardGlow, drawSheenFrames, CARD_W, CARD_H } from './cardart.js';
 
 export const PORTRAITS = {};
 const ENEMY_KEYS = ['knight', 'crusader', 'priest', 'inquisitor'];
 const CREATURE_KEYS = ['guard', 'golem', 'butcher', 'wolf', 'archer', 'banshee'];
+const HYBRID_KEYS = ['cavalry', 'giant', 'screamer', 'hound', 'catapult'];
 
 function canvas(w, h, fn) { const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), c); return c; }
 
@@ -37,7 +39,7 @@ export class BootScene extends Phaser.Scene {
     const bgTex = T.addCanvas('bg', bg.color);
     bgTex.setDataSource(lumNormal(bg.color, 3));
     T.addCanvas('bg_g', bg.glow);
-    T.addCanvas('panel', paintPanel(540, 390));
+    T.addCanvas('panel', paintPanel(540, H - PANEL_Y));
 
     // generic particle / fx textures
     T.addCanvas('px', canvas(4, 4, (c) => { c.fillStyle = '#fff'; c.fillRect(0, 0, 4, 4); }));
@@ -62,6 +64,7 @@ export class BootScene extends Phaser.Scene {
     T.addCanvas('beam', canvas(16, 64, (c) => { const g = c.createLinearGradient(0, 0, 16, 0); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, 16, 64); }));
     // projectiles (pixel art)
     T.addCanvas('arrow', canvas(14, 5, (c) => { c.fillStyle = '#d6ccb0'; c.fillRect(1, 2, 10, 1); c.fillStyle = '#f7f1de'; c.fillRect(10, 1, 2, 3); c.fillRect(12, 2, 2, 1); c.fillStyle = '#6ff7ff'; c.fillRect(0, 1, 2, 1); c.fillRect(0, 3, 2, 1); }));
+    T.addCanvas('boulder', canvas(10, 10, (c) => { c.fillStyle = '#5e5444'; c.beginPath(); c.arc(5, 5, 4.5, 0, Math.PI * 2); c.fill(); c.fillStyle = '#d6ccb0'; c.beginPath(); c.arc(4, 4, 3, 0, Math.PI * 2); c.fill(); c.fillStyle = '#f7f1de'; c.fillRect(3, 3, 1, 1); }));
     T.addCanvas('orb', canvas(12, 12, (c) => { c.fillStyle = '#fff'; c.beginPath(); c.arc(6, 6, 4, 0, Math.PI * 2); c.fill(); c.globalAlpha = 0.5; c.beginPath(); c.arc(6, 6, 6, 0, Math.PI * 2); c.fill(); }));
     T.addCanvas('soul_icon', canvas(20, 22, (c) => {
       c.fillStyle = '#7dff6a'; c.beginPath(); c.arc(10, 14, 7, 0, Math.PI * 2); c.fill(); c.beginPath(); c.moveTo(4, 12); c.quadraticCurveTo(7, 2, 12, 0); c.quadraticCurveTo(10, 7, 16, 11); c.fill();
@@ -77,6 +80,6 @@ export class BootScene extends Phaser.Scene {
     this.anims.create({ key: 'sheen', frames: Array.from({ length: 16 }, (_, k) => ({ key: 'card_sheen', frame: k })), frameRate: 22, repeat: -1, repeatDelay: 1800 });
     for (const k of ['rays', 'big_soft', 'soft', 'fog', 'ring']) T.get(k).setFilter(Phaser.Textures.FilterMode.LINEAR);
 
-    this.scene.start('Game');
+    this.scene.start('Menu');
   }
 }

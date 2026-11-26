@@ -1,19 +1,21 @@
 import { BootScene } from './boot.js';
 import { GameScene } from './game.js';
 import { ZOOM } from './fonts.js';
+import { W, H } from './layout.js';
+import { MenuScene } from './menu.js';
 
 const config = {
   type: Phaser.AUTO,
   parent: 'game',
-  width: 540 * ZOOM,
-  height: 960 * ZOOM,
+  width: W * ZOOM,
+  height: H * ZOOM,
   backgroundColor: '#0b0712',
   pixelArt: true,
   maxLights: 10,
   render: { maxLights: 10, antialias: false, pixelArt: true },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   input: { activePointers: 2 },
-  scene: [BootScene, GameScene],
+  scene: [BootScene, MenuScene, GameScene],
 };
 
 async function start() {

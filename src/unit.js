@@ -1,5 +1,5 @@
 // A battlefield combatant (necromancer, summoned creature or holy enemy).
-import { RARITIES } from './data.js';
+import { RARITIES, MAX_LEVEL } from './data.js';
 import { sfx } from './audio.js';
 
 const ORIGIN_Y = 44 / 48;
@@ -17,11 +17,7 @@ export class Unit {
     this.level = opts.level || 1;
     this.base = opts.stats;
     this.name = opts.name || opts.stats.name;
-    const mult = opts.mult ?? RARITIES[this.rarity].mult;
-    this.maxHp = Math.round(this.base.hp * mult);
-    this.hp = this.maxHp;
-    this.atk = this.base.atk * mult;
-    this.heal = (this.base.heal || 0) * mult;
+    this.fixedMult = opts.mult;
     this.range = this.base.range;
     this.speed = this.base.speed;
     this.shield = 0;
@@ -31,30 +27,55 @@ export class Unit {
     this.healT = 1;
     this.dead = false;
     this.attacking = false;
-    this.radius = this.key === 'golem' || this.key === 'inquisitor' ? 18 : 12;
+    this.radius = ['golem', 'giant', 'catapult', 'inquisitor', 'cavalry'].includes(this.key) ? 18 : 12;
     this.tex = opts.texKey || this.key;
     this.slot = null;
+    this.recalc(true);
 
     const lit = scene.lightsOn;
     this.shadow = scene.add.image(this.x, this.y, 'shadow').setScale(this.radius / 14, 1.4).setAlpha(0.8).setDepth(5);
-    if (this.rarity > 0 && this.team === 'ally' && !this.isNecro) {
-      this.aura = scene.add.image(this.x, this.y, 'aura').setTint(RARITIES[this.rarity].hex).setBlendMode(Phaser.BlendModes.ADD).setDepth(6).setScale(this.radius / 14, 1);
-      scene.tweens.add({ targets: this.aura, alpha: { from: 0.35, to: 0.9 }, duration: 900, yoyo: true, repeat: -1 });
-    }
     this.sprite = scene.add.sprite(this.x, this.y, this.tex, 0).setOrigin(0.5, ORIGIN_Y).setScale(2);
     if (lit) this.sprite.setPipeline('Light2D');
     if (opts.tint) this.sprite.setTint(opts.tint);
     this.glow = scene.add.sprite(this.x, this.y, this.tex + '_g', 0).setOrigin(0.5, ORIGIN_Y).setScale(2).setBlendMode(Phaser.BlendModes.ADD);
     this.flash = scene.add.sprite(this.x, this.y, this.tex, 0).setOrigin(0.5, ORIGIN_Y).setScale(2).setTintFill(0xffffff).setVisible(false);
     this.bar = scene.add.graphics().setDepth(900);
+    this.updateAura();
     this.playAnim('idle');
     this.sprite.on('animationcomplete', (a) => { if (a.key.endsWith('_attack')) { this.attacking = false; this.playAnim('idle'); } });
     this.sync();
   }
 
+  // (Re)compute stats from rarity, level and the scene's run/meta modifiers.
+  recalc(fresh) {
+    const ratio = fresh ? 1 : this.hp / this.maxHp;
+    let m;
+    if (this.fixedMult != null) m = { hp: this.fixedMult, atk: this.fixedMult, heal: this.fixedMult };
+    else m = this.scene.allyMult(this);
+    this.maxHp = Math.round(this.base.hp * m.hp);
+    this.atk = this.base.atk * m.atk;
+    this.heal = (this.base.heal || 0) * m.heal;
+    this.hp = Math.max(1, Math.round(this.maxHp * ratio));
+  }
+
+  updateAura() {
+    if (this.team !== 'ally' || this.isNecro) return;
+    this.auraTween?.remove();
+    this.aura?.destroy();
+    this.aura = null;
+    if (this.rarity > 0) {
+      this.aura = this.scene.add.image(this.x, this.y, 'aura').setTint(RARITIES[this.rarity].hex).setBlendMode(Phaser.BlendModes.ADD).setDepth(6).setScale(this.radius / 14, 1);
+      this.auraTween = this.scene.tweens.add({ targets: this.aura, alpha: { from: 0.35, to: 0.9 }, duration: 900, yoyo: true, repeat: -1 });
+    }
+  }
+
+  setLevel(level, rarity) {
+    this.level = Math.min(MAX_LEVEL, level);
+    if (rarity != null && rarity !== this.rarity) { this.rarity = rarity; this.updateAura(); }
+    this.recalc(true);
+  }
+
   get alive() { return !this.dead; }
-  get cx() { return this.x; }
-  get topY() { return this.y - 70; }
 
   playAnim(name) {
     const k = `${this.tex}_${name}`;
@@ -65,17 +86,18 @@ export class Unit {
 
   sync() {
     const s = this.sprite;
-    const x = this.x + this.kx, y = this.y + (this.rise || 0);
-    s.setPosition(x, y).setDepth(this.y);
+    const lift = this.dragging ? -14 : 0;
+    const x = this.x + this.kx, y = this.y + (this.rise || 0) + lift;
+    s.setPosition(x, y).setDepth(this.dragging ? 1100 : this.y);
     if (this.rise > 0) {
       const vis = Math.max(1, Math.round(44 - this.rise / 2));
       s.setCrop(0, 0, 48, vis); this.glow.setCrop(0, 0, 48, vis);
     } else if (s.isCropped) { s.setCrop(); this.glow.setCrop(); }
     const fr = s.frame.name;
-    this.glow.setPosition(x, y).setDepth(this.y + 0.1).setFrame(fr).setAlpha(s.alpha * 0.75);
+    this.glow.setPosition(x, y).setDepth(s.depth + 0.1).setFrame(fr).setAlpha(s.alpha * 0.75);
     this.glow.setScale(s.scaleX, s.scaleY);
-    if (this.flash.visible) this.flash.setPosition(x, y).setDepth(this.y + 0.2).setFrame(fr).setScale(s.scaleX, s.scaleY);
-    this.shadow.setPosition(this.x, this.y + 1);
+    if (this.flash.visible) this.flash.setPosition(x, y).setDepth(s.depth + 0.2).setFrame(fr).setScale(s.scaleX, s.scaleY);
+    this.shadow.setPosition(this.x, this.y + 1).setAlpha(this.dragging ? 0.4 : 0.8);
     if (this.aura) this.aura.setPosition(this.x, this.y + 1);
     this.drawBar();
   }
@@ -83,8 +105,9 @@ export class Unit {
   drawBar() {
     const g = this.bar; g.clear();
     if (this.dead || this.hidden) return;
-    const w = this.isNecro ? 56 : this.base.boss ? 60 : 38, h = this.isNecro ? 6 : 5;
-    const x = Math.round(this.x - w / 2), y = Math.round(this.y - (this.isNecro ? 98 : this.key === 'golem' || this.key === 'inquisitor' ? 86 : 80));
+    const big = this.radius > 12;
+    const w = this.isNecro ? 56 : this.base.boss ? 60 : big ? 46 : 38, h = this.isNecro ? 6 : 5;
+    const x = Math.round(this.x - w / 2), y = Math.round(this.y - (this.isNecro ? 98 : big ? 88 : 80)) + (this.dragging ? -14 : 0);
     g.fillStyle(0x05030a, 0.85).fillRect(x - 1, y - 1, w + 2, h + 2);
     const pct = Math.max(0, this.hp / this.maxHp);
     const col = this.team === 'ally' ? (this.isNecro ? 0x9b6bff : 0x5ee06a) : 0xe8434f;
@@ -92,11 +115,19 @@ export class Unit {
     g.fillStyle(col, 1).fillRect(x, y, Math.round(w * pct), h);
     g.fillStyle(0xffffff, 0.25).fillRect(x, y, Math.round(w * pct), 1);
     if (this.shield > 0) g.fillStyle(0x9fdcff, 0.9).fillRect(x, y - 3, Math.round(w * Math.min(1, this.shield / this.maxHp)), 2);
-    if (this.team === 'ally' && !this.isNecro && this.rarity > 0) g.fillStyle(RARITIES[this.rarity].hex, 1).fillRect(x - 4, y, 2, h);
+    if (this.team === 'ally' && !this.isNecro) {
+      // level pips
+      const rc = RARITIES[this.rarity].hex;
+      for (let i = 0; i < this.level; i++) {
+        const px = Math.round(this.x - (this.level * 7) / 2 + i * 7);
+        g.fillStyle(0x05030a, 1).fillRect(px, y + h + 2, 6, 6);
+        g.fillStyle(i < this.level ? rc : 0x3a3346, 1).fillRect(px + 1, y + h + 3, 4, 4);
+      }
+    }
   }
 
   update(dt, game) {
-    if (this.dead) return;
+    if (this.dead || this.dragging) return;
     this.cd -= dt; this.healT -= dt;
     if (this.attacking) return;
     // healers
@@ -114,14 +145,12 @@ export class Unit {
     const dx = target.x - this.x, dy = target.y - this.y;
     const d = Math.hypot(dx, dy * 1.6);
     const reach = this.range + target.radius;
-    // enemies must step fully onto the visible battlefield before they may stop and attack
     const offscreen = this.team === 'enemy' && this.x > ENEMY_MAX_X;
     if ((d > reach || offscreen) && this.speed > 0) {
       const step = this.speed * dt;
       let vx = (dx / d) * step, vy = (dy / Math.max(1, Math.hypot(dx, dy))) * step * 0.8;
       if (Math.abs(dx) < reach * 0.5 && Math.abs(dy) > 10) vx *= 0.3;
       if (offscreen && d <= reach) { vx = -step; vy = 0; }
-      // separation
       for (const o of game.units) {
         if (o === this || o.dead || o.team !== this.team) continue;
         const ox = this.x - o.x, oy = this.y - o.y, od = Math.hypot(ox, oy);
@@ -157,26 +186,28 @@ export class Unit {
       let dmg = this.atk * game.atkMult(this);
       let crit = false;
       if (this.base.crit && Math.random() < this.base.crit) { dmg *= 2; crit = true; }
+      if (this.base.charge && !this.charged) { this.charged = true; dmg *= 2; crit = true; game.floatText(this.x, this.y - 96, 'HÜCUM!', '#ffd36a', 18); }
       if (proj) game.spawnProjectile(this, target, proj, dmg, false, crit);
       else game.meleeHit(this, target, dmg, crit);
     });
   }
 
-  takeDamage(dmg, crit, src) {
+  takeDamage(dmg, crit, src, melee) {
     if (this.dead) return;
     dmg = Math.round(dmg);
     if (this.shield > 0) { const a = Math.min(this.shield, dmg); this.shield -= a; dmg -= a; }
     this.hp -= dmg;
     const game = this.scene;
     game.floatText(this.x + Phaser.Math.Between(-8, 8), this.y - 72, crit ? `${dmg}!` : `${dmg}`, crit ? '#ffcf4a' : this.team === 'ally' ? '#ff6b6b' : '#ffffff', crit ? 22 : 16);
-    // hurt flash + knockback
     this.flash.setVisible(true).setAlpha(0.6);
     game.time.delayedCall(60, () => this.flash.setVisible(false));
     const dir = src && src.x > this.x ? -1 : 1;
     game.tweens.add({ targets: this, kx: dir * (crit ? 8 : 4), duration: 60, yoyo: true, ease: 'Quad.easeOut', onComplete: () => { this.kx = 0; } });
     game.hitSparks(this.x, this.y - 40, this.team === 'ally' ? 0xc8ffb8 : 0xfff2c0, crit ? 14 : 6);
     if (crit) sfx.crit(); else sfx.hit();
-    if (this.hp <= 0) this.die();
+    // thorns
+    if (this.base.reflect && melee && src && !src.dead && dmg > 0) src.takeDamage(dmg * this.base.reflect, false, this, false);
+    if (this.hp <= 0) { this.die(); if (src && !src.dead) game.onKill(src, this); }
   }
 
   receiveHeal(v) {
@@ -194,9 +225,10 @@ export class Unit {
     game.onUnitDeath(this);
     this.sprite.anims.stop();
     const parts = [this.sprite, this.glow, this.shadow, this.aura].filter(Boolean);
+    this.auraTween?.remove();
     if (this.team === 'ally') {
       sfx.bones();
-      game.deathBurst(this, this.key === 'wolf' || this.key === 'banshee' ? [0x6ac8e0, 0xc4f2ff] : [0xd6ccb0, 0x8a7d66, 0x6a5a4a]);
+      game.deathBurst(this, ['wolf', 'banshee', 'hound', 'screamer'].includes(this.key) ? [0x6ac8e0, 0xc4f2ff] : [0xd6ccb0, 0x8a7d66, 0x6a5a4a]);
       game.tweens.add({ targets: [this.sprite, this.glow], scaleY: 0.2, scaleX: 2.6, alpha: 0, duration: 420, ease: 'Quad.easeIn' });
     } else {
       sfx.death();
@@ -208,7 +240,10 @@ export class Unit {
     game.time.delayedCall(800, () => { parts.forEach((p) => p.destroy()); this.flash.destroy(); this.bar.destroy(); });
   }
 
-  destroy() {
+  // Remove instantly without death effects (used when merged away)
+  vanish() {
+    this.dead = true;
+    this.auraTween?.remove();
     [this.sprite, this.glow, this.flash, this.shadow, this.aura, this.bar].forEach((p) => p && p.destroy());
   }
 }

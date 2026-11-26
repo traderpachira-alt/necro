@@ -105,6 +105,7 @@ function glyph(c, kind, x, y, col) {
     case 'ghost': c.beginPath(); c.arc(0, -6, 16, Math.PI, 0); c.lineTo(16, 18); for (let i = 0; i < 4; i++) c.lineTo(16 - (i + 0.5) * 8, 12 + (i % 2) * 8); c.lineTo(-16, 18); c.closePath(); c.fill(); c.fillStyle = '#05030a'; c.beginPath(); c.arc(-6, -6, 4, 0, Math.PI * 2); c.arc(6, -6, 4, 0, Math.PI * 2); c.fill(); break;
     case 'crack': c.beginPath(); c.moveTo(-4, -28); c.lineTo(6, -10); c.lineTo(-6, 0); c.lineTo(8, 12); c.lineTo(0, 28); c.stroke(); c.beginPath(); c.moveTo(-6, 0); c.lineTo(-18, 8); c.stroke(); c.beginPath(); c.moveTo(6, -10); c.lineTo(18, -16); c.stroke(); break;
     case 'hand': c.beginPath(); c.moveTo(-14, 24); c.lineTo(-14, -2); for (let i = 0; i < 4; i++) { c.lineTo(-14 + i * 8, -22 + (i === 0 || i === 3 ? 6 : 0)); c.lineTo(-10 + i * 8, -22 + (i === 0 || i === 3 ? 6 : 0)); c.lineTo(-8 + i * 8, -4); } c.lineTo(16, 24); c.closePath(); c.fill(); break;
+    case 'fuse': c.beginPath(); c.arc(-9, 0, 15, 0, Math.PI * 2); c.stroke(); c.beginPath(); c.arc(9, 0, 15, 0, Math.PI * 2); c.stroke(); c.beginPath(); c.arc(0, 0, 6, 0, Math.PI * 2); c.fill(); for (const s2 of [-1, 1]) { c.beginPath(); c.moveTo(s2 * 30, -22); c.lineTo(s2 * 20, -14); c.stroke(); c.beginPath(); c.moveTo(s2 * 30, 22); c.lineTo(s2 * 20, 14); c.stroke(); } break;
     case 'sun': c.beginPath(); c.arc(0, 0, 11, 0, Math.PI * 2); c.fill(); for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; c.beginPath(); c.moveTo(Math.cos(a) * 15, Math.sin(a) * 15); c.lineTo(Math.cos(a) * (i % 2 ? 22 : 28), Math.sin(a) * (i % 2 ? 22 : 28)); c.stroke(); } break;
   }
   c.restore();
@@ -246,5 +247,31 @@ export function drawSheenFrames(n = 16) {
     c.fillStyle = g; c.fillRect(-CARD_W, 0, CARD_W * 4, CARD_H);
     c.restore();
   }
+  return cv;
+}
+
+// Frame + icon for a run-upgrade ("Lütuf") choice. Text is drawn by the game on top.
+export const BOON_W = 240, BOON_H = 380;
+export function drawBoonFrame(icon, colHex) {
+  const cv = newCanvas(BOON_W, BOON_H), c = cv.getContext('2d');
+  const col = colHex;
+  // frame
+  const g = c.createLinearGradient(0, 0, BOON_W, BOON_H);
+  g.addColorStop(0, lighten(col, 0.45)); g.addColorStop(0.3, col); g.addColorStop(0.6, darken(col, 0.4)); g.addColorStop(1, lighten(col, 0.15));
+  rr(c, 2, 2, BOON_W - 4, BOON_H - 4, 18); c.fillStyle = g; c.fill(); c.lineWidth = 3; c.strokeStyle = '#05030a'; c.stroke();
+  rr(c, 12, 12, BOON_W - 24, BOON_H - 24, 12);
+  const bg = c.createLinearGradient(0, 12, 0, BOON_H - 12); bg.addColorStop(0, '#1c1230'); bg.addColorStop(1, '#07040c');
+  c.fillStyle = bg; c.fill();
+  // icon halo
+  const cx = BOON_W / 2, cy = 104;
+  const rg = c.createRadialGradient(cx, cy, 4, cx, cy, 90); rg.addColorStop(0, rgba(col, 0.55)); rg.addColorStop(1, rgba(col, 0));
+  c.fillStyle = rg; c.fillRect(12, 12, BOON_W - 24, 190);
+  runeCircle(c, cx, cy, 62, col, 0.8);
+  const roles = ['tank', 'attacker', 'ranger', 'healer'];
+  if (roles.includes(icon)) { c.save(); c.translate(cx, cy); c.scale(2.2, 2.2); roleIcon(c, icon, 0, 0, col); c.restore(); }
+  else if (icon === 'gem') { c.save(); c.translate(cx, cy); c.scale(2.2, 2.2); gem(c, 0, 0, col); c.restore(); }
+  else glyph(c, { staff: 'eye', heart: 'drop', soul: 'soul', card: 'hand', coin: 'sun', ward: 'shield', skull: 'ghost' }[icon] || 'soul', cx, cy, '#ffffff');
+  // divider under icon
+  c.fillStyle = col; c.fillRect(30, 186, BOON_W - 60, 2);
   return cv;
 }

@@ -3,10 +3,10 @@ import { RARITIES, CREATURES, RITUALS, CURSES } from './data.js';
 import { drawCreatureCard, drawSpellCard, CARD_W, CARD_H } from './cardart.js';
 import { PORTRAITS } from './boot.js';
 import { sfx } from './audio.js';
+import { HAND_Y, DECK, CARD_SCALE, W } from './layout.js';
+export { HAND_Y };
 
 const S = 0.5; // texture -> display scale
-export const HAND_Y = 790;
-const DECK = { x: 52, y: 908 };
 
 function faceKey(scene, card) {
   const key = card.kind === 'creature' ? `cf_${card.id}_${card.rarity}` : `cf_${card.kind}_${card.id}`;
@@ -30,7 +30,7 @@ export class CardView {
   constructor(scene, hand, card) {
     this.scene = scene; this.hand = hand; this.card = card;
     this.revealed = false; this.busy = false;
-    const c = this.c = scene.add.container(DECK.x, DECK.y).setDepth(1200).setScale(0.6);
+    const c = this.c = scene.add.container(DECK.x, DECK.y).setDepth(1200).setScale(0.3);
     this.glowImg = scene.add.image(0, 0, 'card_glow').setScale(S).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
     this.face = scene.add.image(0, 0, 'card_back').setScale(S);
     this.sheen = scene.add.sprite(0, 0, 'card_sheen', 0).setScale(S).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
@@ -92,13 +92,14 @@ export class CardView {
 
   // Squash/tilt toward the pointer to fake a 3D card
   tilt(px) {
-    const t = Phaser.Math.Clamp((px - this.c.x) / 50, -1, 1);
+    const t = Phaser.Math.Clamp((px - this.c.x) / (50 * CARD_SCALE), -1, 1);
     this.c.scaleX = this.tscale * (1 - Math.abs(t) * 0.1);
     this.c.angle = this.trot + t * 5;
     if (this.sheen.visible) this.sheen.setFrame(Math.round(((t + 1) / 2) * 15));
   }
 
   moveTo(x, y, rot, scale, dur = 260) {
+    scale *= CARD_SCALE;
     this.tx = x; this.ty = y; this.trot = rot; this.tscale = scale;
     if (this.busy) return;
     this.scene.tweens.add({ targets: this.c, x, y, angle: rot, scaleX: scale, scaleY: scale, duration: dur, ease: 'Cubic.easeOut' });
@@ -135,14 +136,15 @@ export class Hand {
   layout() {
     const n = this.cards.length;
     if (!n) return;
-    const spacing = n > 1 ? Math.min(104, 420 / (n - 1)) : 0;
-    const x0 = 270 - (spacing * (n - 1)) / 2;
+    const cw = 100 * CARD_SCALE;
+    const spacing = n > 1 ? Math.min(cw + 6, (W - 24 - cw) / (n - 1)) : 0;
+    const x0 = W / 2 - (spacing * (n - 1)) / 2;
     this.cards.forEach((v, i) => {
       if (!v.dealt) return;
       const mid = i - (n - 1) / 2;
       const sel = this.selected === v;
       const x = x0 + i * spacing;
-      const y = HAND_Y + mid * mid * 3.5 + (sel ? -38 : 0);
+      const y = HAND_Y + mid * mid * 3.5 * CARD_SCALE + (sel ? -36 * CARD_SCALE : 0);
       v.c.setDepth(sel ? 1300 : 1200 + i);
       v.moveTo(x, y, sel ? 0 : mid * 3.2, sel ? 1.18 : 1);
       v.c.setAlpha(this.selected && !sel ? 0.75 : 1);
