@@ -5,7 +5,9 @@ import {
   CREATURES, ENEMIES, NECRO, RITUALS, CURSES, RARITIES, ROLES, CONFIG, BOONS, MAX_LEVEL, FUSION_MIN_LEVEL,
   waveComposition, levelMult, recipeFor, newRunMods,
   makeCard, STARTER_DECK, RITUAL_VALUES, ritualDesc, LOCKED_RITUALS, itemStats, ITEMS,
+  SYNERGIES, computeSynergies, synergyBonus, TAG_NAMES,
 } from './data.js';
+import { installEvents } from './events.js';
 import { installDeckUI } from './deckui.js';
 import { sfx, unlockAudio, toggleMute, isMuted } from './audio.js';
 import { TITLE, BODY, ZOOM } from './fonts.js';
@@ -103,7 +105,8 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- stats
   allyMult(u) {
     const it = u.item ? itemStats(u.item) : {};
-    const ih = 1 + (it.hp || 0), ia = 1 + (it.atk || 0);
+    const sy = u.syn || {};
+    const ih = (1 + (it.hp || 0)) * (1 + (sy.hp || 0)), ia = (1 + (it.atk || 0)) * (1 + (sy.atk || 0));
     if (u.isNecro) return { hp: (1 + 0.1 * this.meta.body) * (1 + this.mods.necroHp) * ih, atk: (1 + this.mods.necroAtk) * ia, heal: 1 };
     const role = u.base.role, rm = RARITIES[u.rarity].mult * levelMult(u.level);
     return {
@@ -196,9 +199,45 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (p, objs) => { if (!objs.length && (this.hand.selected || this.selUnit)) this.select(null); });
   }
 
+  // ---------------------------------------------------------------- synergies
+  refreshSynergies() {
+    if (!this.necro) return;
+    const al = this.allyCreatures();
+    const { active, progress } = computeSynergies(al);
+    const sig = active.join(',') + '|' + al.map((u) => u.id + ':' + u.key).join(',');
+    if (sig === this.synSig) return;
+    const before = new Set(this.synActive || []);
+    this.synSig = sig; this.synActive = active;
+    for (const u of [this.necro, ...al]) { u.syn = synergyBonus(u, active); u.recalc(false); }
+    for (const k of active) if (!before.has(k) && this.wave > 0) { this.floatText(W / 2, 110, `${SYNERGIES[k].name}!`, SYNERGIES[k].color, 20); sfx.rare(); }
+    this.drawSynergies(progress, active);
+  }
+  drawSynergies(progress, active) {
+    (this.synTexts || []).forEach((t) => t.destroy());
+    this.synTexts = [];
+    let x = 10, y = 72;
+    const short = { legion: `${TAG_NAMES.skeleton}`, swarm: `${TAG_NAMES.ghost}`, flesh: `${TAG_NAMES.flesh}`, wall: 'Tank', cult: 'Roller' };
+    for (const [k, S] of Object.entries(SYNERGIES)) {
+      const [have, need] = progress[k], on = active.includes(k);
+      const t = txt(this, x, y, on ? `✦ ${S.name}` : `${short[k]} ${have}/${need}`, 13, on ? S.color : '#8a7aa8', { strokeThickness: 3 }).setDepth(1402).setInteractive({ useHandCursor: true });
+      t.on('pointerup', () => this.setInfo(`${S.name} ${on ? '(aktif)' : `(${have}/${need})`}`, S.desc, S.color));
+      if (x + t.width > W - 10) { x = 10; y += 18; t.setPosition(x, y); }
+      x += t.width + 10;
+      this.synTexts.push(t);
+    }
+  }
+  paladinCover(u) {
+    for (const o of this.units) {
+      if (o === u || o.dead || o.hidden || o.team !== u.team || !o.base.guardAura) continue;
+      if (Math.hypot(o.x - u.x, o.y - u.y) <= o.base.guardAura) return 0.25;
+    }
+    return 0;
+  }
+
   setInfo(title, body, color = '#fff2d0') { this.infoTitle.setText(title).setColor(color); this.infoBody.setText(body); }
 
   updateHUD() {
+    this.refreshSynergies();
     this.waveText.setText(`DALGA ${this.wave}`);
     this.scoreText.setText(String(this.score));
     this.soulText.setText(String(this.souls));
@@ -936,7 +975,11 @@ export class GameScene extends Phaser.Scene {
       // health grows faster than damage; bosses scale more gently than the rank and file
       const m = (E.boss ? 1 + w * 0.08 : 1 + w * 0.09 + w * w * 0.002) * this.enemyMult;
       const am = (E.boss ? 1 + w * 0.04 : 1 + w * 0.06 + w * w * 0.001) * this.enemyMult;
-      u = new Unit(this, { key, texKey: key + '_L', team: 'enemy', stats: { ...E, atk: E.atk * am / m, heal: (E.heal || 0) * am / m }, mult: m, x: W + 30, y });
+      const elite = !E.boss && this.wave >= 6 && Math.random() < Math.min(0.25, (this.wave - 5) * 0.03);
+      const em = elite ? 1.7 : 1, ea = elite ? 1.3 : 1;
+      u = new Unit(this, { key, texKey: key + '_L', team: 'enemy', elite, name: elite ? 'Elit ' + E.name : E.name,
+        stats: { ...E, name: elite ? 'Elit ' + E.name : E.name, souls: (E.souls || 3) * (elite ? 2 : 1), atk: E.atk * (am * ea) / (m * em), heal: (E.heal || 0) * am / m }, mult: m * em, x: W + 30, y });
+      if (E.boss && key === 'archangel') { this.cameras.main.flash(500, 255, 240, 200); this.banner('BAŞMELEK', '#ffe890', 'Göklerin cezası iniyor'); sfx.legendary(); }
     }
     u.sprite.setInteractive();
     this.units.push(u);
@@ -963,11 +1006,11 @@ export class GameScene extends Phaser.Scene {
     this.buff = { shield: 0, atk: 1 }; this.enemyMult = 1;
     this.projectiles.forEach((p) => this.killProjectile(p)); this.projectiles = [];
     this.updateHUD();
-    this.time.delayedCall(2100, () => { if (this.state === 'waveEnd') this.showCardReward(() => { if (this.wave % 2 === 0) this.showBoons(); else this.startPrep(); }); });
+    this.time.delayedCall(2100, () => { if (this.state === 'waveEnd') this.showCardReward(() => { const next = () => this.maybeEvent(() => this.startPrep()); if (this.wave % 2 === 0) this.showBoons(next); else next(); }); });
   }
 
   // ---------------------------------------------------------------- boons (run upgrades)
-  showBoons() {
+  showBoons(done) {
     this.state = 'boon';
     this.select(null);
     const keys = Phaser.Utils.Array.Shuffle(Object.keys(BOONS).slice()).slice(0, 3);
@@ -1007,7 +1050,7 @@ export class GameScene extends Phaser.Scene {
         this.floatText(W / 2, 560, `${B.name} kazanıldı`, '#ffd36a', 20);
         this.tweens.add({ targets: c, scale: 1.12, duration: 200, yoyo: true });
         layer.filter((o) => o !== c).forEach((o) => this.tweens.add({ targets: o, alpha: 0, duration: 300 }));
-        this.tweens.add({ targets: c, alpha: 0, delay: 600, duration: 300, onComplete: () => { layer.forEach((o) => o.destroy()); this.startPrep(); } });
+        this.tweens.add({ targets: c, alpha: 0, delay: 600, duration: 300, onComplete: () => { layer.forEach((o) => o.destroy()); if (done) done(); else this.startPrep(); } });
       });
       layer.push(c);
     });
@@ -1078,10 +1121,28 @@ export class GameScene extends Phaser.Scene {
     this.btnSpeed.set(`HIZ x${this.speedMul}`);
   }
 
+  smite(boss) {
+    const targets = this.allyCreatures().filter((o) => !o.hidden);
+    const t = targets.sort((a, b) => b.maxHp - a.maxHp)[0] || this.necro;
+    if (!t || t.dead) return;
+    sfx.holy(); sfx.slam();
+    this.floatText(t.x, t.y - 120, 'İLAHİ CEZA!', '#ffe890', 18);
+    const beam = this.add.image(t.x, t.y, 'beam').setOrigin(0.5, 1).setScale(4, 0).setTint(0xfff2c0).setBlendMode(Phaser.BlendModes.ADD).setDepth(t.y + 2);
+    this.tweens.add({ targets: beam, scaleY: 9, duration: 180, yoyo: true, hold: 200, onComplete: () => beam.destroy() });
+    this.cameras.main.shake(200, 0.008);
+    this.time.delayedCall(180, () => { if (!t.dead) t.takeDamage(boss.atk * 1.6, true, boss, false); });
+    for (const o of this.units) if (o.team === 'enemy' && !o.dead) { o.receiveHeal(o.maxHp * 0.08, true); }
+    this.fxSoul.setParticleTint(0xffe8a0); this.fxSoul.explode(20, boss.x, boss.y - 60);
+  }
+
   // ---------------------------------------------------------------- combat helpers
   findTarget(u) {
     let best = null, bd = Infinity;
     const foes = this.units.filter((o) => !o.dead && !o.hidden && o.team !== u.team);
+    if (u.base.backline && u.team === 'enemy') {
+      const back = foes.filter((o) => !o.isNecro).sort((a, b) => a.x - b.x)[0];
+      return back || foes.find((o) => o.isNecro) || null;
+    }
     if (u.team === 'enemy') {
       const taunts = foes.filter((o) => o.base.taunt && Math.abs(o.x - u.x) < 200);
       if (taunts.length) return taunts.reduce((a, b) => (Math.hypot(a.x - u.x, a.y - u.y) < Math.hypot(b.x - u.x, b.y - u.y) ? a : b));
@@ -1166,10 +1227,12 @@ export class GameScene extends Phaser.Scene {
 
   spawnProjectile(src, target, type, val, isHeal, crit) {
     const dir = src.team === 'ally' ? 1 : -1;
-    const off = { necro: [8, -74], archer: [26, -50], screamer: [26, -50], banshee: [16, -60], priest: [8, -76], catapult: [-10, -80] }[src.key] || [18, -50];
+    const off = { necro: [8, -74], archer: [26, -50], screamer: [26, -50], hunter: [26, -50], banshee: [16, -60], priest: [8, -76], firepriest: [8, -76], catapult: [-10, -80] }[src.key] || [18, -50];
     const x = src.x + off[0] * dir, y = src.y + off[1];
     const conf = {
       arrow: { tex: 'arrow', tint: src.key === 'screamer' ? 0x9ffff0 : null, scale: 2, speed: 620, light: null },
+      huntarrow: { tex: 'arrow', tint: 0xff9a6a, scale: 2, speed: 680, light: null },
+      fire: { tex: 'orb', tint: 0xff7020, scale: 1.9, speed: 380, light: 0xff7020, trail: 0xff8a30 },
       boulder: { tex: 'boulder', tint: null, scale: 2.2, speed: 380, light: null, arc: true },
       bolt: { tex: 'orb', tint: 0x7dff6a, scale: 1.6, speed: 460, light: 0x6dff6a, trail: 0x5cff5a },
       holy: { tex: 'orb', tint: 0xffe08a, scale: 1.4, speed: 440, light: 0xffd88a, trail: 0xffd36a },
@@ -1181,7 +1244,7 @@ export class GameScene extends Phaser.Scene {
     if (conf.tex === 'orb') img.setBlendMode(Phaser.BlendModes.ADD);
     let light = null;
     if (conf.light && this.lightsOn && this.lights.lights.length < 8) light = this.lights.addLight(x, y, 110, conf.light, 1.3);
-    if (type === 'arrow' || type === 'boulder') sfx.arrow(); else if (type === 'bolt') sfx.bolt(); else if (type === 'holy') sfx.holy();
+    if (type === 'arrow' || type === 'huntarrow' || type === 'boulder') sfx.arrow(); else if (type === 'bolt') sfx.bolt(); else if (type === 'holy') sfx.holy();
     this.projectiles.push({ img, light, target, val, isHeal, crit, src, speed: conf.speed, trail: conf.trail, type, tx: target.x, ty: target.y - 40, sx: x, sy: y, arc: conf.arc, t: 0 });
   }
 
@@ -1214,12 +1277,13 @@ export class GameScene extends Phaser.Scene {
           p.target.receiveHeal(p.val); sfx.heal();
           this.fxSoul.setParticleTint(p.type === 'wisp' ? 0x6dff9a : 0xffe8a0); this.fxSoul.explode(10, p.target.x, p.target.y - 30);
         } else {
-          p.target.takeDamage(p.val, p.crit, p.src, false);
+          if (p.type === 'fire' && !p.src.dead) { sfx.slam(); this.areaHit(p.src, p.target.x, p.target.y, p.val, p.src.base.aoe || 45, p.crit, p.target); }
+          else p.target.takeDamage(p.val, p.crit, p.src, false);
           if (p.src.base.healArrow) {
             const al = this.lowestAlly(p.src.team);
             if (al) { al.receiveHeal(p.val * p.src.base.healArrow); this.fxSoul.setParticleTint(0x7affd8); this.fxSoul.explode(6, al.x, al.y - 30); }
           }
-          if (p.type !== 'arrow') { this.fxSpark.setParticleTint(p.trail); this.fxSpark.explode(10, p.tx, p.ty); }
+          if (p.trail) { this.fxSpark.setParticleTint(p.trail); this.fxSpark.explode(10, p.tx, p.ty); }
         }
         continue;
       }
@@ -1238,6 +1302,11 @@ export class GameScene extends Phaser.Scene {
       this.staffLight.intensity = 1.5 + Math.sin(time / 300) * 0.25 + (this.necro.attacking ? 0.8 : 0);
     }
     if (this.state === 'battle') {
+      for (const u of this.units) {
+        if (u.dead || u.team !== 'enemy' || !u.base.smiteCd || u.x > W - 20) continue;
+        u.smiteT = (u.smiteT ?? 3) - dt;
+        if (u.smiteT <= 0) { u.smiteT = u.base.smiteCd; this.smite(u); }
+      }
       this.spawnTimer -= dt;
       if (this.spawnQueue.length && this.spawnTimer <= 0) {
         this.spawnEnemy(this.spawnQueue.shift());
@@ -1257,3 +1326,4 @@ export class GameScene extends Phaser.Scene {
 }
 
 installDeckUI(GameScene.prototype, txt, Button);
+installEvents(GameScene.prototype, txt, Button);

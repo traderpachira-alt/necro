@@ -13,6 +13,9 @@ Tarayıcıda (telefonda da) oynanan, dikey ekranlı 2D pixel-art bir oyun. Necro
 - **Birleştirme:** Aynı türden ve seviyeden iki yaratığı üst üste sürükle, seviye atlasın (en fazla Sv.5). Yaratık kartı da aynı türden Sv.1 yaratığın üstüne bırakılabilir. Alan doluysa kart feda edilip ruha çevrilebilir.
 - **Kemik Füzyonu:** Bu ritüel kartıyla farklı türden iki yaratık (ikisi de en az Sv.2) birleşip hibrit olur. 5 hibrit vardır; keşfedilenler Grimuar'a yazılır.
 - **Savaş:** Herkes otomatik savaşır. Sağ kalanlar sonraki dalgaya geçer; dalga sonunda iyileşirler (Banshee varsa daha fazla).
+- **Sinerjiler:** Sahadaki yaratık kombinasyonları bonus verir: Kemik Lejyonu (3 iskelet), Hayalet Sürüsü (2 hayalet), Et Yığını (2 et yaratığı), Kalkan Duvarı (2 tank), Ölüm Tarikatı (her rolden bir yaratık). Aktif sinerjiler savaş alanının üstünde görünür.
+- **Düşmanlar:** Haçlı Kılıççı, Kutsal Şövalye, Rahip, Avcı Okçu (arka hattı hedefler), Kutsal Paladin (yakınındakileri korur), Ateş Rahibi (alan hasarı), elit sürümler; boss olarak Engizisyoncu ve 20. dalgada Başmelek.
+- **Olaylar:** Bazı dalgalardan sonra Gizemli Tüccar, Lanetli Sandık, Kan Sunağı, Unutulmuş Mezar veya Ruh Pınarı çıkar.
 - **Lütuf:** Her 2 dalgada bir 3 yükseltmeden biri seçilir (o oyun boyunca geçerli).
 - **Kara Ruh:** Oyun bitince kazanılır; ana menüde kalıcı yükseltmelere ve yeni ritüel kartlarının kilidini açmaya harcanır.
 - **Kayıt:** Skorlar, Grimuar ve yükseltmeler tarayıcıda saklanır. İsteğe bağlı olarak Ayarlar'dan kendi GitHub token'ınla (yalnızca `gist` izni) gizli bir gist'e yedeklenir.

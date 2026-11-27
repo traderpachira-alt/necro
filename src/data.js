@@ -49,6 +49,10 @@ export const ENEMIES = {
   knight: { name: 'Kutsal Şövalye', hp: 200, atk: 13, cd: 1.2, range: 34, speed: 38, souls: 3, cost: 3 },
   crusader: { name: 'Haçlı Kılıççı', hp: 120, atk: 18, cd: 0.9, range: 32, speed: 58, souls: 3, cost: 2 },
   priest: { name: 'Rahip', hp: 90, atk: 10, cd: 1.6, range: 230, speed: 36, proj: 'holy', heal: 16, healCd: 3, souls: 4, cost: 3 },
+  paladin: { name: 'Kutsal Paladin', hp: 280, atk: 14, cd: 1.3, range: 36, speed: 32, souls: 5, cost: 4, guardAura: 95, desc: 'Yakınındaki dostları %25 daha az hasar alır.' },
+  hunter: { name: 'Avcı Okçu', hp: 100, atk: 16, cd: 1.4, range: 300, speed: 40, proj: 'huntarrow', backline: true, souls: 4, cost: 3, desc: 'Arka hattaki yaratıkları hedef alır.' },
+  firepriest: { name: 'Ateş Rahibi', hp: 110, atk: 15, cd: 2.0, range: 240, speed: 34, proj: 'fire', aoe: 50, souls: 5, cost: 4, desc: 'Alan hasarı veren ateş topları atar.' },
+  archangel: { name: 'Başmelek', hp: 1400, atk: 34, cd: 1.3, range: 42, speed: 34, aoe: 65, souls: 40, boss: true, smiteCd: 7, scale: 2.6, cost: 15, desc: 'Düzenli olarak en güçlü yaratığına ilahi ceza indirir ve dostlarını iyileştirir.' },
   inquisitor: { name: 'Engizisyoncu', hp: 820, atk: 28, cd: 1.5, range: 40, speed: 30, aoe: 60, souls: 25, boss: true, cost: 12 },
 };
 
@@ -109,17 +113,21 @@ export function randomCard(wave, { luck = 0, curseMult = 1 } = {}) {
 export function waveComposition(w) {
   const list = [];
   const boss = w % 5 === 0;
-  if (boss) list.push('inquisitor');
-  if (boss && w >= 15) list.push('inquisitor');
+  if (boss) list.push(w >= 20 && w % 10 === 0 ? 'archangel' : 'inquisitor');
+  if (boss && w >= 15 && w !== 20) list.push('inquisitor');
   let budget = 4 + w * 2.0 - (boss ? 9 : 0);
-  const maxPriests = w >= 2 ? 1 + Math.floor(w / 6) : 0;
-  let priests = 0;
+  const caps = {
+    priest: w >= 2 ? 1 + Math.floor(w / 6) : 0,
+    hunter: w >= 4 ? 1 + Math.floor(w / 7) : 0,
+    paladin: w >= 6 ? 1 + Math.floor(w / 8) : 0,
+    firepriest: w >= 8 ? 1 + Math.floor(w / 12) : 0,
+  };
+  const count = {};
   while (budget >= 2) {
-    const opts = ['crusader', 'knight'];
-    if (priests < maxPriests) opts.push('priest');
+    const opts = ['crusader', 'knight', ...Object.keys(caps).filter((k) => (count[k] || 0) < caps[k])];
     const k = opts[(Math.random() * opts.length) | 0];
     if (ENEMIES[k].cost > budget) { list.push('crusader'); budget -= 2; continue; }
-    if (k === 'priest') priests++;
+    count[k] = (count[k] || 0) + 1;
     list.push(k); budget -= ENEMIES[k].cost;
   }
   return list;
@@ -231,3 +239,56 @@ export function itemDesc(item) {
   return ITEMS[item.id].desc.replace('{v}', Math.round(v * 100));
 }
 export function itemValue(item) { return 6 + item.rarity * 8; }
+
+// ---------------- synergies ----------------
+export const TAGS = {
+  guard: ['skeleton'], archer: ['skeleton'], golem: ['flesh'], butcher: ['flesh'], wolf: ['ghost'], banshee: ['ghost'],
+  cavalry: ['skeleton', 'ghost'], giant: ['flesh'], screamer: ['skeleton', 'ghost'], hound: ['ghost'], catapult: ['flesh', 'skeleton'],
+};
+export const TAG_NAMES = { skeleton: 'İskelet', ghost: 'Hayalet', flesh: 'Et' };
+export const SYNERGIES = {
+  legion: { name: 'Kemik Lejyonu', tag: 'skeleton', need: 3, desc: 'İskeletler +%20 hasar', color: '#e8dfc6', bonus: { atk: 0.2 } },
+  swarm: { name: 'Hayalet Sürüsü', tag: 'ghost', need: 2, desc: 'Hayaletler %15 kaçınma', color: '#8ee8ff', bonus: { dodge: 0.15 } },
+  flesh: { name: 'Et Yığını', tag: 'flesh', need: 2, desc: 'Et yaratıkları +%20 can', color: '#c8a0a8', bonus: { hp: 0.2 } },
+  wall: { name: 'Kalkan Duvarı', role: 'tank', need: 2, desc: 'Tanklar %15 daha az hasar alır', color: '#9fb8ff', bonus: { dr: 0.15 } },
+  cult: { name: 'Ölüm Tarikatı', allRoles: true, desc: 'Her rolden bir yaratık: Necromancer +%30 hasar', color: '#c88aff', necro: { atk: 0.3 } },
+};
+// returns { active: [keys], progress: {key: [have, need]} }
+export function computeSynergies(units) {
+  const tagCount = {}, roleCount = {};
+  for (const u of units) {
+    for (const t of TAGS[u.key] || []) tagCount[t] = (tagCount[t] || 0) + 1;
+    roleCount[u.base.role] = (roleCount[u.base.role] || 0) + 1;
+  }
+  const active = [], progress = {};
+  for (const [k, S] of Object.entries(SYNERGIES)) {
+    let have, need;
+    if (S.tag) { have = tagCount[S.tag] || 0; need = S.need; }
+    else if (S.role) { have = roleCount[S.role] || 0; need = S.need; }
+    else { have = ['tank', 'attacker', 'ranger', 'healer'].filter((r) => roleCount[r]).length; need = 4; }
+    progress[k] = [have, need];
+    if (have >= need) active.push(k);
+  }
+  return { active, progress };
+}
+export function synergyBonus(u, active) {
+  const out = {};
+  for (const k of active) {
+    const S = SYNERGIES[k];
+    let ok = false;
+    if (u.isNecro) { if (S.necro) for (const [s2, v] of Object.entries(S.necro)) out[s2] = (out[s2] || 0) + v; continue; }
+    if (S.tag) ok = (TAGS[u.key] || []).includes(S.tag);
+    else if (S.role) ok = u.base.role === S.role;
+    if (ok && S.bonus) for (const [s2, v] of Object.entries(S.bonus)) out[s2] = (out[s2] || 0) + v;
+  }
+  return out;
+}
+
+// ---------------- between-wave events ----------------
+export const EVENTS = {
+  merchant: { name: 'Gizemli Tüccar', text: 'Sisin içinden fenerli, yüzü görünmeyen bir tüccar çıkıyor. "Ruhların karşılığında her şey bulunur..."' },
+  chest: { name: 'Lanetli Sandık', text: 'Bir mezarın dibinde zincirlerle bağlı bir sandık duruyor. Kilit, dokununca fısıldıyor.' },
+  altar: { name: 'Kan Sunağı', text: 'Eski bir sunak, kan karşılığında güç vaat ediyor.' },
+  grave: { name: 'Unutulmuş Mezar', text: 'Adı silinmiş bir mezar taşı. Altında tanıdık bir ruh yatıyor olabilir.' },
+  spring: { name: 'Ruh Pınarı', text: 'Yeşil ışıkla parlayan bir pınar. Suyu ölüleri bile canlandırıyor.' },
+};

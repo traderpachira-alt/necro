@@ -166,6 +166,29 @@ const HEADS = {
     p.line(x - 4, y - 2, x + 4, y - 2, PAL.gold[1]);
     p.line(x, y - 8, x, y - 4, PAL.gold[1]); p.line(x - 1, y - 6, x + 1, y - 6, PAL.gold[1]);
   },
+  hunthood(p, x, y) {
+    p.ball(x, y, 4.5, 4.5, ['#1a2a14', '#34502a', '#4e7040']);
+    p.px(x - 5, y - 3, '#34502a'); p.px(x - 6, y - 1, '#1a2a14');
+    p.ellipse(x + 2, y + 1, 2.2, 2.8, PAL.skin[1]);
+    p.px(x + 3, y, '#1a1008'); p.px(x + 2, y + 3, PAL.skin[0]);
+    p.line(x - 3, y + 4, x + 3, y + 5, '#6a4a2a');
+  },
+  firehood(p, x, y, f) {
+    p.ball(x, y + 1, 4, 3.5, PAL.skin);
+    p.px(x + 2, y, '#2a1810');
+    p.poly([[x - 5, y - 1], [x + 4, y - 1], [x + 1, y - 9], [x - 2, y - 10]], '#9e2a1a');
+    p.poly([[x - 5, y - 1], [x - 2, y - 1], [x - 2, y - 10]], '#e0602a');
+    p.line(x - 5, y - 1, x + 4, y - 1, PAL.gold[1]);
+    p.glow(x, y - 5, '#ffb030'); p.glow(x, y - 6, '#ffe080'); p.halo(x, y - 5, 2, '#ff8020', 90);
+  },
+  angel(p, x, y, f) {
+    p.ball(x, y + 1, 4, 4, PAL.skin);
+    p.rect(x - 4, y - 4, 7, 3, '#f0d070'); p.px(x - 5, y - 2, '#f0d070'); p.px(x - 5, y, '#d8b050'); p.px(x - 4, y + 2, '#d8b050');
+    p.px(x + 2, y, '#3a6ad8'); p.glow(x + 2, y, '#bfe0ff');
+    const hy = y - 8 + (f % 2 ? 0 : 0);
+    for (let k = -4; k <= 4; k++) { p.glow(x + k, hy - (Math.abs(k) > 3 ? 0 : 1) + (Math.abs(k) === 4 ? 1 : 0), '#ffe890'); }
+    p.halo(x, hy, 4, '#ffd85a', 110);
+  },
   inquisitor(p, x, y) {
     p.ball(x, y + 1, 4, 4, PAL.skin);
     p.rect(x - 7, y - 3, 15, 2, PAL.black[1]); p.rect(x - 7, y - 3, 15, 1, PAL.black[2]);
@@ -180,6 +203,15 @@ const HEADS = {
 function humanoid(p, c, ps, f) {
   const cx = 21 + ps.lean, hip = 32 + ps.bob, sh = 21 + ps.bob;
   const legs = c.legs || PAL.leather, boots = c.boots || PAL.leather;
+  if (c.wings) {
+    const flap = [0, 1, 2, 1][f % 4];
+    for (let k = 0; k < 7; k++) {
+      const a = -2.3 - k * 0.12 + flap * 0.08, len = 16 - k;
+      const x0 = cx - 3, y0 = sh + 2 + k * 1.5;
+      p.line(x0, y0, x0 + Math.cos(a) * len, y0 + Math.sin(a) * len - flap, k % 2 ? c.wings[1] : c.wings[2], 2.5);
+    }
+    for (let k = 0; k < 4; k++) p.softGlow(cx - 10 - k * 2, sh - 6 + k, '#fff2c0', 60);
+  }
   if (c.cape) cape(p, cx - 1, sh + 1, c.cape, ps.cape, c.robe ? 20 : 16);
   // back arm
   const backHand = arm(p, cx - 2, sh + 2, ps.aB, c.armLen || 8, c.sleeve || c.body, c.hand || PAL.skin);
@@ -241,6 +273,11 @@ function humanoid(p, c, ps, f) {
       p.glow(tx, ty - 6, gc); p.glow(tx + 1, ty - 6, gc); p.glow(tx, ty - 7, '#d4ffc8'); p.glow(tx - 1, ty - 6, gc); p.glow(tx, ty - 5, gc);
       p.halo(tx, ty - 6, 3 + Math.round(ps.cast * 3), '#4cff4a', 100 + ps.cast * 80);
       p.line(tx - 3, ty, tx - 4, ty + 3, PAL.bone[1]); p.line(tx + 3, ty, tx + 4, ty + 3, PAL.bone[1]);
+    } else if (c.staffTop === 'fire') {
+      p.ball(tx, ty - 1, 2.5, 2, PAL.gold);
+      const fl = [0, 1, 0, -1][f % 4];
+      p.glow(tx, ty - 4, '#ff8020'); p.glow(tx + fl, ty - 5, '#ffb030'); p.glow(tx, ty - 6, '#ffe080'); p.glow(tx - 1, ty - 4, '#ff6010'); p.glow(tx + 1, ty - 4, '#ff6010');
+      p.halo(tx, ty - 5, 3 + Math.round(ps.cast * 3), '#ff7020', 110 + ps.cast * 80);
     } else {
       p.line(tx, ty - 6, tx, ty, PAL.gold[1], 2); p.line(tx - 3, ty - 4, tx + 3, ty - 4, PAL.gold[1], 2);
       p.px(tx - 1, ty - 6, PAL.gold[2]);
@@ -390,10 +427,14 @@ const HUMANOIDS = {
   crusader: { head: 'greathelm', body: PAL.darkSteel, legs: PAL.darkSteel, boots: PAL.steel, hand: PAL.steel, sleeve: PAL.steel, weapon: 'sword', tabard: PAL.red, belt: PAL.leather, cape: PAL.red },
   priest: { head: 'priest', body: PAL.white, robe: true, trim: PAL.gold, weapon: 'staff', staffTop: 'cross', hand: PAL.skin, sleeve: PAL.white, staffWood: '#c8a040', staffWoodHi: '#ffe48a' },
   screamer: { head: 'skull', eye: '#7affd8', body: ['#24506e', '#5fb8d8', '#c4f2ff'], legs: PAL.ghost, boots: PAL.ghost, hand: PAL.bone, sleeve: PAL.ghost, weapon: 'bow', ribs: true, cape: ['#1a3a4a', '#4a90a8', '#9ae0f0'] },
+  paladin: { head: 'helmet', body: ['#6a5420', '#c8a040', '#f0d890'], legs: PAL.steel, boots: PAL.gold, hand: PAL.steel, sleeve: PAL.steel, weapon: 'sword', shield: PAL.gold, emblem: PAL.white, kite: true, pauldron: PAL.gold, belt: PAL.white, cape: ['#6a6a8a', '#c8c8e8', '#ffffff'], wide: true },
+  hunter: { head: 'hunthood', body: ['#1e3a1e', '#3e6a32', '#6a9a4a'], legs: PAL.leather, boots: PAL.leather, hand: PAL.skin, sleeve: ['#1e3a1e', '#3e6a32', '#6a9a4a'], weapon: 'bow', cape: ['#1a2a14', '#34502a', '#4e7040'], belt: PAL.leather },
+  firepriest: { head: 'firehood', body: ['#4a0e0e', '#9e2a1a', '#e0602a'], robe: true, trim: PAL.gold, weapon: 'staff', staffTop: 'fire', hand: PAL.skin, sleeve: ['#4a0e0e', '#9e2a1a', '#e0602a'], staffWood: '#6a3a1a', staffWoodHi: '#a8683a' },
+  archangel: { head: 'angel', body: ['#8a6a20', '#e0b848', '#fff0a8'], legs: PAL.gold, boots: PAL.gold, hand: PAL.skin, sleeve: PAL.gold, weapon: 'greatsword', wings: ['#a8a8c8', '#e8e8f8', '#ffffff'], cape: PAL.white, pauldron: PAL.gold, belt: PAL.white, wide: true },
   inquisitor: { head: 'inquisitor', body: PAL.black, robe: true, trim: PAL.red, cape: PAL.red, weapon: 'greatsword', hand: PAL.leather, sleeve: PAL.black, pauldron: PAL.steel, wide: true },
 };
 
-export const SPRITE_KEYS = ['necro', 'guard', 'golem', 'butcher', 'wolf', 'archer', 'banshee', 'cavalry', 'giant', 'screamer', 'hound', 'catapult', 'knight', 'crusader', 'priest', 'inquisitor'];
+export const SPRITE_KEYS = ['necro', 'guard', 'golem', 'butcher', 'wolf', 'archer', 'banshee', 'cavalry', 'giant', 'screamer', 'hound', 'catapult', 'knight', 'crusader', 'priest', 'inquisitor', 'paladin', 'hunter', 'firepriest', 'archangel'];
 
 // copy the opaque pixels of `src` (rows < maxRow) onto `dst`, shifted by (dx, dy)
 function overlay(dst, src, dx, dy, maxRow) {

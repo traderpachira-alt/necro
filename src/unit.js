@@ -30,20 +30,23 @@ export class Unit {
     this.healT = 1;
     this.dead = false;
     this.attacking = false;
-    this.radius = ['golem', 'giant', 'catapult', 'inquisitor', 'cavalry'].includes(this.key) ? 18 : 12;
+    this.radius = ['golem', 'giant', 'catapult', 'inquisitor', 'cavalry', 'paladin'].includes(this.key) ? 18 : this.key === 'archangel' ? 24 : 12;
     this.tex = opts.texKey || this.key;
     this.slot = null;
     this.item = null;
+    this.syn = {};
+    this.elite = !!opts.elite;
+    this.sc = opts.scale || this.base.scale || 2;
     this.card = opts.card || null;
     this.recalc(true);
 
     const lit = scene.lightsOn;
     this.shadow = scene.add.image(this.x, this.y, 'shadow').setScale(this.radius / 14, 1.4).setAlpha(0.8).setDepth(5);
-    this.sprite = scene.add.sprite(this.x, this.y, this.tex, 0).setOrigin(0.5, ORIGIN_Y).setScale(2);
+    this.sprite = scene.add.sprite(this.x, this.y, this.tex, 0).setOrigin(0.5, ORIGIN_Y).setScale(this.sc);
     if (lit) this.sprite.setPipeline('Light2D');
     if (opts.tint) this.sprite.setTint(opts.tint);
-    this.glow = scene.add.sprite(this.x, this.y, this.tex + '_g', 0).setOrigin(0.5, ORIGIN_Y).setScale(2).setBlendMode(Phaser.BlendModes.ADD);
-    this.flash = scene.add.sprite(this.x, this.y, this.tex, 0).setOrigin(0.5, ORIGIN_Y).setScale(2).setTintFill(0xffffff).setVisible(false);
+    this.glow = scene.add.sprite(this.x, this.y, this.tex + '_g', 0).setOrigin(0.5, ORIGIN_Y).setScale(this.sc).setBlendMode(Phaser.BlendModes.ADD);
+    this.flash = scene.add.sprite(this.x, this.y, this.tex, 0).setOrigin(0.5, ORIGIN_Y).setScale(this.sc).setTintFill(0xffffff).setVisible(false);
     this.bar = scene.add.graphics().setDepth(900);
     this.updateAura();
     this.playAnim('idle');
@@ -64,6 +67,11 @@ export class Unit {
   }
 
   updateAura() {
+    if (this.team === 'enemy' && this.elite) {
+      this.aura = this.scene.add.image(this.x, this.y, 'aura').setTint(0xffc23a).setBlendMode(Phaser.BlendModes.ADD).setDepth(6).setScale(this.radius / 12, 1.2);
+      this.auraTween = this.scene.tweens.add({ targets: this.aura, alpha: { from: 0.5, to: 1 }, duration: 500, yoyo: true, repeat: -1 });
+      return;
+    }
     if (this.team !== 'ally' || this.isNecro) return;
     this.auraTween?.remove();
     this.aura?.destroy();
@@ -83,7 +91,7 @@ export class Unit {
   get alive() { return !this.dead; }
 
   // item stat helper
-  ist(k) { return this.item ? (itemStats(this.item)[k] || 0) : 0; }
+  ist(k) { return (this.item ? (itemStats(this.item)[k] || 0) : 0) + (this.syn[k] || 0); }
 
   setItem(item) {
     this.item = item;
@@ -124,10 +132,10 @@ export class Unit {
     if (this.dead || this.hidden) { this.itemIcon?.setVisible(false); return; }
     const big = this.radius > 12;
     const w = this.isNecro ? 56 : this.base.boss ? 60 : big ? 46 : 38, h = this.isNecro ? 6 : 5;
-    const x = Math.round(this.x - w / 2), y = Math.round(this.y - (this.isNecro ? 98 : big ? 88 : 80)) + (this.dragging ? -14 : 0);
+    const x = Math.round(this.x - w / 2), y = Math.round(this.y - (this.isNecro ? 98 : this.key === 'archangel' ? 118 : big ? 88 : 80)) + (this.dragging ? -14 : 0);
     g.fillStyle(0x05030a, 0.85).fillRect(x - 1, y - 1, w + 2, h + 2);
     const pct = Math.max(0, this.hp / this.maxHp);
-    const col = this.team === 'ally' ? (this.isNecro ? 0x9b6bff : 0x5ee06a) : 0xe8434f;
+    const col = this.team === 'ally' ? (this.isNecro ? 0x9b6bff : 0x5ee06a) : this.elite ? 0xffa030 : 0xe8434f;
     g.fillStyle(0x2a1a2a, 1).fillRect(x, y, w, h);
     g.fillStyle(col, 1).fillRect(x, y, Math.round(w * pct), h);
     g.fillStyle(0xffffff, 0.25).fillRect(x, y, Math.round(w * pct), 1);
@@ -224,7 +232,8 @@ export class Unit {
     if (this.dead) return;
     const dodge = this.ist('dodge');
     if (dodge && src && Math.random() < dodge) { this.scene.floatText(this.x, this.y - 72, 'KAÇTI', '#c8b0ff', 15); return; }
-    dmg = Math.round(dmg);
+    let red = this.ist('dr') + (this.team === 'enemy' ? this.scene.paladinCover(this) : 0);
+    dmg = Math.round(dmg * (1 - Math.min(0.6, red)));
     const ls = src && !src.dead ? src.ist('lifesteal') : 0;
     if (ls && dmg > 0) src.receiveHeal(dmg * ls, true);
     if (this.shield > 0) { const a = Math.min(this.shield, dmg); this.shield -= a; dmg -= a; }
