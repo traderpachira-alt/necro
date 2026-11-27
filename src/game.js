@@ -603,7 +603,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (u.team !== 'ally') {
-      this.setInfo(u.name, `Can ${Math.round(u.hp)}/${u.maxHp}  •  Hasar ${Math.round(u.atk)}`, '#ff8a80');
+      this.setInfo(u.name, `Can ${Math.round(u.hp)}/${u.maxHp}  •  Hasar ${Math.round(u.atk)}${u.base.desc ? '  —  ' + u.base.desc : ''}`, '#ff8a80');
       return;
     }
     const R = RARITIES[u.rarity];
@@ -1213,6 +1213,11 @@ export class GameScene extends Phaser.Scene {
   findTarget(u) {
     let best = null, bd = Infinity;
     const foes = this.units.filter((o) => !o.dead && !o.hidden && o.team !== u.team);
+    // taunting tanks (Kemik Muhafız, Kemik Süvarisi) pull every enemy, even back-line hunters
+    if (u.team === 'enemy') {
+      const taunts = foes.filter((o) => o.base.taunt && Math.abs(o.x - u.x) < Math.max(200, u.range + 40));
+      if (taunts.length) return taunts.reduce((a, b) => (Math.hypot(a.x - u.x, a.y - u.y) < Math.hypot(b.x - u.x, b.y - u.y) ? a : b));
+    }
     if (u.base.backline && u.team === 'enemy') {
       const back = foes.filter((o) => !o.isNecro).sort((a, b) => a.x - b.x)[0];
       return back || foes.find((o) => o.isNecro) || null;

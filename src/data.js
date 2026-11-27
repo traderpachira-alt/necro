@@ -46,14 +46,14 @@ export const FUSION_MIN_LEVEL = 2;
 export const NECRO = { name: 'Necromancer', hp: 420, atk: 22, cd: 1.4, range: 360, speed: 0, proj: 'bolt' };
 
 export const ENEMIES = {
-  knight: { name: 'Kutsal Şövalye', hp: 200, atk: 13, cd: 1.2, range: 34, speed: 38, souls: 3, cost: 3 },
-  crusader: { name: 'Haçlı Kılıççı', hp: 120, atk: 18, cd: 0.9, range: 32, speed: 58, souls: 3, cost: 2 },
-  priest: { name: 'Rahip', hp: 90, atk: 10, cd: 1.6, range: 230, speed: 36, proj: 'holy', heal: 16, healCd: 3, souls: 4, cost: 3 },
+  knight: { name: 'Kutsal Şövalye', hp: 200, atk: 13, cd: 1.2, range: 34, speed: 38, souls: 3, cost: 3, desc: 'Dayanıklı yakın dövüşçü.' },
+  crusader: { name: 'Haçlı Kılıççı', hp: 120, atk: 18, cd: 0.9, range: 32, speed: 58, souls: 3, cost: 2, desc: 'Hızlı ve sert vuran kılıççı.' },
+  priest: { name: 'Rahip', hp: 90, atk: 10, cd: 1.6, range: 230, speed: 36, proj: 'holy', heal: 16, healCd: 3, souls: 4, cost: 3, desc: 'Uzaktan saldırır ve yaralı dostlarını iyileştirir.' },
   paladin: { name: 'Kutsal Paladin', hp: 280, atk: 14, cd: 1.3, range: 36, speed: 32, souls: 5, cost: 4, guardAura: 95, desc: 'Yakınındaki dostları %25 daha az hasar alır.' },
-  hunter: { name: 'Avcı Okçu', hp: 100, atk: 16, cd: 1.4, range: 300, speed: 40, proj: 'huntarrow', backline: true, souls: 4, cost: 3, desc: 'Arka hattaki yaratıkları hedef alır.' },
+  hunter: { name: 'Avcı Okçu', hp: 100, atk: 16, cd: 1.4, range: 300, speed: 40, proj: 'huntarrow', backline: true, souls: 4, cost: 3, desc: 'Arka hattaki yaratıkları hedef alır; düşmanı üzerine çeken tanklar onu kendine yöneltir.' },
   firepriest: { name: 'Ateş Rahibi', hp: 110, atk: 15, cd: 2.0, range: 240, speed: 34, proj: 'fire', aoe: 50, souls: 5, cost: 4, desc: 'Alan hasarı veren ateş topları atar.' },
   archangel: { name: 'Başmelek', hp: 1400, atk: 34, cd: 1.3, range: 42, speed: 34, aoe: 65, souls: 40, boss: true, smiteCd: 7, scale: 2.6, cost: 15, desc: 'Düzenli olarak en güçlü yaratığına ilahi ceza indirir ve dostlarını iyileştirir.' },
-  inquisitor: { name: 'Engizisyoncu', hp: 820, atk: 28, cd: 1.5, range: 40, speed: 30, aoe: 60, souls: 25, boss: true, cost: 12 },
+  inquisitor: { name: 'Engizisyoncu', hp: 820, atk: 28, cd: 1.5, range: 40, speed: 30, aoe: 60, souls: 25, boss: true, cost: 12, desc: 'Boss. Yumruğu alan hasarı verir.' },
 };
 
 export const RITUALS = {
@@ -173,9 +173,9 @@ let CARD_UID = 1;
 export function makeCard(kind, id, rarity = 0, level = 1) { return { uid: CARD_UID++, kind, id, rarity, level }; }
 
 export const STARTER_DECK = [
-  ['creature', 'guard'], ['creature', 'guard'], ['creature', 'butcher'], ['creature', 'butcher'],
-  ['creature', 'archer'], ['creature', 'archer'], ['creature', 'golem'], ['creature', 'wolf'], ['creature', 'banshee'],
-  ['ritual', 'harvest'], ['ritual', 'bonearmor'], ['ritual', 'whisper'],
+  ['creature', 'guard'], ['creature', 'guard'], ['creature', 'guard'], ['creature', 'butcher'], ['creature', 'butcher'],
+  ['creature', 'archer'], ['creature', 'archer'], ['creature', 'golem'], ['creature', 'golem'], ['creature', 'wolf'], ['creature', 'wolf'],
+  ['creature', 'banshee'], ['ritual', 'harvest'], ['ritual', 'bonearmor'], ['ritual', 'whisper'],
 ];
 export const BASE_RITUALS = ['harvest', 'bonearmor', 'whisper'];
 export const LOCKED_RITUALS = { blood: 'unlock_blood', frenzy: 'unlock_frenzy', fusion: 'unlock_fusion' };
@@ -201,7 +201,8 @@ export function rewardChoices(wave, unlocked, luck = 0) {
   const pool = [...BASE_RITUALS, ...Object.keys(LOCKED_RITUALS).filter((k) => unlocked.includes(k))];
   const out = [];
   while (out.length < 3) {
-    const c = Math.random() < 0.7
+    // at least two creature choices; the third slot may be a ritual
+    const c = (out.length < 2 || Math.random() < 0.6)
       ? makeCard('creature', BASE_CREATURES[(Math.random() * BASE_CREATURES.length) | 0], rollRarity(luck + Math.min(4, wave * 0.3)))
       : makeCard('ritual', pool[(Math.random() * pool.length) | 0]);
     if (!out.some((o) => o.kind === c.kind && o.id === c.id && o.rarity === c.rarity)) out.push(c);
