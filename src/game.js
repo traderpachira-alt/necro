@@ -933,9 +933,10 @@ export class GameScene extends Phaser.Scene {
     } else {
       const E = ENEMIES[key];
       const w = this.wave - 1;
-      const m = (1 + w * 0.15 + w * w * 0.006) * this.enemyMult;
-      const am = (1 + w * 0.1 + w * w * 0.003) * this.enemyMult;
-      u = new Unit(this, { key, texKey: key + '_L', team: 'enemy', stats: { ...E, atk: E.atk * am / m }, mult: m, x: W + 30, y });
+      // health grows faster than damage; bosses scale more gently than the rank and file
+      const m = (E.boss ? 1 + w * 0.08 : 1 + w * 0.09 + w * w * 0.002) * this.enemyMult;
+      const am = (E.boss ? 1 + w * 0.04 : 1 + w * 0.06 + w * w * 0.001) * this.enemyMult;
+      u = new Unit(this, { key, texKey: key + '_L', team: 'enemy', stats: { ...E, atk: E.atk * am / m, heal: (E.heal || 0) * am / m }, mult: m, x: W + 30, y });
     }
     u.sprite.setInteractive();
     this.units.push(u);

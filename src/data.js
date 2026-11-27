@@ -108,14 +108,18 @@ export function randomCard(wave, { luck = 0, curseMult = 1 } = {}) {
 
 export function waveComposition(w) {
   const list = [];
-  if (w % 5 === 0) list.push('inquisitor');
-  if (w >= 10 && w % 5 === 0) list.push('inquisitor');
-  let budget = 4 + w * 2.7 - (w % 5 === 0 ? 6 : 0);
-  const opts = ['crusader', 'knight'];
-  if (w >= 2) opts.push('priest');
+  const boss = w % 5 === 0;
+  if (boss) list.push('inquisitor');
+  if (boss && w >= 15) list.push('inquisitor');
+  let budget = 4 + w * 2.0 - (boss ? 9 : 0);
+  const maxPriests = w >= 2 ? 1 + Math.floor(w / 6) : 0;
+  let priests = 0;
   while (budget >= 2) {
+    const opts = ['crusader', 'knight'];
+    if (priests < maxPriests) opts.push('priest');
     const k = opts[(Math.random() * opts.length) | 0];
     if (ENEMIES[k].cost > budget) { list.push('crusader'); budget -= 2; continue; }
+    if (k === 'priest') priests++;
     list.push(k); budget -= ENEMIES[k].cost;
   }
   return list;
