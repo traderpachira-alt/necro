@@ -1,6 +1,6 @@
 // Generates every texture procedurally, then starts the game.
 import { buildFrames, SPRITE_KEYS } from './art.js';
-import { registerSheet, lumNormal } from './pixel.js';
+import { registerSheet, lumNormal, SS } from './pixel.js';
 import { paintBackground, paintPanel } from './background.js';
 import { H, PANEL_Y } from './layout.js';
 import { drawItemIcon, drawEventIcon } from './cardart.js';
@@ -8,6 +8,26 @@ import { ITEMS, EVENTS } from './data.js';
 import { drawCardBack, drawCardGlow, drawSheenFrames, CARD_W, CARD_H } from './cardart.js';
 
 export const PORTRAITS = {};
+export const tierOf = (level) => (level >= 5 ? 2 : level >= 3 ? 1 : 0);
+export const texFor = (key, tier) => (tier ? `${key}_t${tier}` : key);
+
+function makeAnims(scene, k) {
+  if (scene.anims.exists(k + '_idle')) return;
+  const fr = (a) => a.map((f) => ({ key: k, frame: f }));
+  scene.anims.create({ key: k + '_idle', frames: fr([0, 1, 2, 3]), frameRate: 5, repeat: -1 });
+  scene.anims.create({ key: k + '_walk', frames: fr([4, 5, 6, 7]), frameRate: 9, repeat: -1 });
+  scene.anims.create({ key: k + '_attack', frames: fr([8, 9, 10, 11]), frameRate: 12, repeat: 0 });
+}
+// Evolved looks (Sv.3+ / Sv.5) are generated on first use to keep loading fast.
+export function ensureTier(scene, key, tier) {
+  const k = texFor(key, tier);
+  if (!scene.textures.exists(k)) {
+    const { color } = registerSheet(scene, k, buildFrames(key, tier));
+    PORTRAITS[k] = color;
+    makeAnims(scene, k);
+  }
+  return k;
+}
 const ENEMY_KEYS = ['knight', 'crusader', 'priest', 'inquisitor', 'paladin', 'hunter', 'firepriest', 'archangel'];
 const CREATURE_KEYS = ['guard', 'golem', 'butcher', 'wolf', 'archer', 'banshee'];
 const HYBRID_KEYS = ['cavalry', 'giant', 'screamer', 'hound', 'catapult'];
@@ -30,20 +50,34 @@ export class BootScene extends Phaser.Scene {
       for (const suffix of ['', '_L']) {
         const k = key + suffix;
         if (!T.exists(k)) continue;
-        const fr = (a) => a.map((f) => ({ key: k, frame: f }));
-        this.anims.create({ key: k + '_idle', frames: fr([0, 1, 2, 3]), frameRate: 5, repeat: -1 });
-        this.anims.create({ key: k + '_walk', frames: fr([4, 5, 6, 7]), frameRate: 9, repeat: -1 });
-        this.anims.create({ key: k + '_attack', frames: fr([8, 9, 10, 11]), frameRate: 12, repeat: 0 });
+        makeAnims(this, k);
       }
     }
     // background
     const bg = paintBackground();
+    this.registry.set('candles', bg.candles);
     const bgTex = T.addCanvas('bg', bg.color);
     bgTex.setDataSource(lumNormal(bg.color, 3));
     T.addCanvas('bg_g', bg.glow);
     T.addCanvas('panel', paintPanel(540, H - PANEL_Y));
 
     // generic particle / fx textures
+    T.addCanvas('cloud', canvas(320, 110, (c) => {
+      for (let i = 0; i < 22; i++) { const x = 30 + Math.random() * 260, y = 35 + Math.random() * 40, rr = 18 + Math.random() * 30; const g = c.createRadialGradient(x, y, 0, x, y, rr); g.addColorStop(0, 'rgba(40,28,70,0.55)'); g.addColorStop(1, 'rgba(40,28,70,0)'); c.fillStyle = g; c.fillRect(0, 0, 320, 110); }
+      for (let i = 0; i < 10; i++) { const x = 40 + Math.random() * 240, y = 30 + Math.random() * 20, rr = 10 + Math.random() * 16; const g = c.createRadialGradient(x, y, 0, x, y, rr); g.addColorStop(0, 'rgba(110,90,150,0.25)'); g.addColorStop(1, 'rgba(110,90,150,0)'); c.fillStyle = g; c.fillRect(0, 0, 320, 110); }
+    }));
+    const bat = T.addCanvas('bat', canvas(32, 12, (c) => {
+      c.fillStyle = '#0a0610';
+      for (const [ox, up] of [[0, true], [16, false]]) {
+        c.beginPath(); c.ellipse(ox + 8, 6, 2, 3, 0, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.moveTo(ox + 7, 6); c.quadraticCurveTo(ox + 3, up ? 0 : 10, ox, up ? 2 : 9); c.lineTo(ox + 3, up ? 5 : 7); c.closePath(); c.fill();
+        c.beginPath(); c.moveTo(ox + 9, 6); c.quadraticCurveTo(ox + 13, up ? 0 : 10, ox + 16, up ? 2 : 9); c.lineTo(ox + 13, up ? 5 : 7); c.closePath(); c.fill();
+      }
+    }));
+    bat.add(0, 0, 0, 0, 16, 12); bat.add(1, 0, 16, 0, 16, 12);
+    this.anims.create({ key: 'bat_fly', frames: [{ key: 'bat', frame: 0 }, { key: 'bat', frame: 1 }], frameRate: 10, repeat: -1 });
+    T.addCanvas('rain', canvas(2, 14, (c) => { const g = c.createLinearGradient(0, 0, 0, 14); g.addColorStop(0, 'rgba(180,200,255,0)'); g.addColorStop(1, 'rgba(200,215,255,0.8)'); c.fillStyle = g; c.fillRect(0, 0, 2, 14); }));
+    T.addCanvas('flame', canvas(8, 14, (c) => { const g = c.createRadialGradient(4, 9, 0, 4, 9, 6); g.addColorStop(0, '#fff6c0'); g.addColorStop(0.4, '#ffb030'); g.addColorStop(1, 'rgba(255,80,20,0)'); c.fillStyle = g; c.beginPath(); c.moveTo(4, 0); c.quadraticCurveTo(8, 8, 4, 14); c.quadraticCurveTo(0, 8, 4, 0); c.fill(); c.fillStyle = '#e8dcc0'; c.fillRect(3, 11, 2, 3); }));
     T.addCanvas('px', canvas(4, 4, (c) => { c.fillStyle = '#fff'; c.fillRect(0, 0, 4, 4); }));
     T.addCanvas('soft', canvas(32, 32, (c) => { const g = c.createRadialGradient(16, 16, 0, 16, 16, 16); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, 'rgba(255,255,255,0.45)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, 32, 32); }));
     T.addCanvas('big_soft', canvas(128, 128, (c) => { const g = c.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(255,255,255,0.9)'); g.addColorStop(0.5, 'rgba(255,255,255,0.25)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, 128, 128); }));
@@ -80,7 +114,7 @@ export class BootScene extends Phaser.Scene {
     const sheen = T.addCanvas('card_sheen', drawSheenFrames(16)); sheen.setFilter(Phaser.Textures.FilterMode.LINEAR);
     for (let k = 0; k < 16; k++) sheen.add(k, 0, k * CARD_W, 0, CARD_W, CARD_H);
     this.anims.create({ key: 'sheen', frames: Array.from({ length: 16 }, (_, k) => ({ key: 'card_sheen', frame: k })), frameRate: 22, repeat: -1, repeatDelay: 1800 });
-    for (const k of ['rays', 'big_soft', 'soft', 'fog', 'ring']) T.get(k).setFilter(Phaser.Textures.FilterMode.LINEAR);
+    for (const k of ['rays', 'big_soft', 'soft', 'fog', 'ring', 'cloud', 'rain', 'flame']) T.get(k).setFilter(Phaser.Textures.FilterMode.LINEAR);
 
     for (const id of Object.keys(ITEMS)) T.addCanvas('item_' + id, drawItemIcon(id)).setFilter(Phaser.Textures.FilterMode.LINEAR);
     for (const id of Object.keys(EVENTS)) T.addCanvas('ev_' + id, drawEventIcon(id)).setFilter(Phaser.Textures.FilterMode.LINEAR);

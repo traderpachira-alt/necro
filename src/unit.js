@@ -2,6 +2,8 @@
 import { RARITIES, MAX_LEVEL, itemStats } from './data.js';
 import { sfx } from './audio.js';
 import { BF } from './layout.js';
+import { SS } from './pixel.js';
+import { ensureTier, tierOf, texFor } from './boot.js';
 
 const ORIGIN_Y = 44 / 48;
 const ENEMY_MAX_X = 490; // right-most x a melee enemy may attack from (fully on screen)
@@ -31,12 +33,14 @@ export class Unit {
     this.dead = false;
     this.attacking = false;
     this.radius = ['golem', 'giant', 'catapult', 'inquisitor', 'cavalry', 'paladin'].includes(this.key) ? 18 : this.key === 'archangel' ? 24 : 12;
-    this.tex = opts.texKey || this.key;
     this.slot = null;
     this.item = null;
     this.syn = {};
     this.elite = !!opts.elite;
-    this.sc = opts.scale || this.base.scale || 2;
+    this.tier = this.team === 'ally' && !this.isNecro ? tierOf(this.level) : 0;
+    this.baseSc = (opts.scale || this.base.scale || 2) / SS;
+    this.sc = this.baseSc * (this.tier === 2 ? 1.12 : 1);
+    this.tex = opts.texKey || (this.tier ? ensureTier(scene, this.key, this.tier) : this.key);
     this.card = opts.card || null;
     this.recalc(true);
 
@@ -49,6 +53,7 @@ export class Unit {
     this.flash = scene.add.sprite(this.x, this.y, this.tex, 0).setOrigin(0.5, ORIGIN_Y).setScale(this.sc).setTintFill(0xffffff).setVisible(false);
     this.bar = scene.add.graphics().setDepth(900);
     this.updateAura();
+    this.updateTierFx();
     this.playAnim('idle');
     this.sprite.on('animationcomplete', (a) => { if (a.key.endsWith('_attack')) { this.attacking = false; this.playAnim('idle'); } });
     this.sync();
@@ -84,11 +89,38 @@ export class Unit {
 
   setLevel(level, rarity) {
     this.level = Math.min(MAX_LEVEL, level);
+    const t = tierOf(this.level);
+    if (t !== this.tier && this.team === 'ally' && !this.isNecro) this.setTier(t);
     if (rarity != null && rarity !== this.rarity) { this.rarity = rarity; this.updateAura(); }
     this.recalc(true);
   }
 
   get alive() { return !this.dead; }
+
+  // legendary-form creatures shed a constant trickle of glowing motes
+  updateTierFx() {
+    this.tierFx?.destroy(); this.tierFx = null;
+    if (this.tier !== 2) return;
+    const col = this.rarity ? RARITIES[this.rarity].hex : 0xffd36a;
+    this.tierFx = this.scene.add.particles(0, 0, 'soft', {
+      x: { min: -18, max: 18 }, y: { min: -70, max: -10 }, lifespan: 900, speedY: { min: -40, max: -15 }, speedX: { min: -8, max: 8 },
+      scale: { start: 0.35, end: 0 }, alpha: { start: 0.9, end: 0 }, tint: [col, 0xffffff], blendMode: 'ADD', frequency: 110,
+    }).setDepth(this.y + 0.3);
+    this.tierFx.startFollow(this.sprite);
+  }
+
+  // swap to the evolved look
+  setTier(t) {
+    this.tier = t;
+    this.tex = ensureTier(this.scene, this.key, t);
+    this.sc = this.baseSc * (t === 2 ? 1.12 : 1);
+    this.sprite.setTexture(this.tex, 0).setScale(this.sc);
+    this.glow.setTexture(this.tex + '_g', 0).setScale(this.sc);
+    this.flash.setTexture(this.tex, 0).setScale(this.sc);
+    this.sprite.anims.stop(); this.playAnim('idle');
+    this.evolved = true;
+    this.updateTierFx();
+  }
 
   // item stat helper
   ist(k) { return (this.item ? (itemStats(this.item)[k] || 0) : 0) + (this.syn[k] || 0); }
@@ -115,8 +147,8 @@ export class Unit {
     const x = this.x + this.kx, y = this.y + (this.rise || 0) + lift;
     s.setPosition(x, y).setDepth(this.dragging ? 1100 : this.y);
     if (this.rise > 0) {
-      const vis = Math.max(1, Math.round(44 - this.rise / 2));
-      s.setCrop(0, 0, 48, vis); this.glow.setCrop(0, 0, 48, vis);
+      const vis = Math.max(1, Math.round((44 - this.rise / 2) * SS));
+      s.setCrop(0, 0, 48 * SS, vis); this.glow.setCrop(0, 0, 48 * SS, vis);
     } else if (s.isCropped) { s.setCrop(); this.glow.setCrop(); }
     const fr = s.frame.name;
     this.glow.setPosition(x, y).setDepth(s.depth + 0.1).setFrame(fr).setAlpha(s.alpha * 0.75);
@@ -271,7 +303,7 @@ export class Unit {
     if (this.team === 'ally') {
       sfx.bones();
       game.deathBurst(this, ['wolf', 'banshee', 'hound', 'screamer'].includes(this.key) ? [0x6ac8e0, 0xc4f2ff] : [0xd6ccb0, 0x8a7d66, 0x6a5a4a]);
-      game.tweens.add({ targets: [this.sprite, this.glow], scaleY: 0.2, scaleX: 2.6, alpha: 0, duration: 420, ease: 'Quad.easeIn' });
+      game.tweens.add({ targets: [this.sprite, this.glow], scaleY: 0.2 / SS, scaleX: this.sc * 1.3, alpha: 0, duration: 420, ease: 'Quad.easeIn' });
     } else {
       sfx.death();
       game.deathBurst(this, [0xfff2c0, 0xffd36a, 0xffffff]);
@@ -279,7 +311,7 @@ export class Unit {
       game.tweens.add({ targets: [this.sprite, this.glow], y: this.y - 30, alpha: 0, duration: 650, ease: 'Sine.easeIn' });
     }
     game.tweens.add({ targets: [this.shadow, this.aura].filter(Boolean), alpha: 0, duration: 400 });
-    this.itemIcon?.destroy(); this.itemRing?.destroy();
+    this.itemIcon?.destroy(); this.itemRing?.destroy(); this.tierFx?.destroy();
     game.time.delayedCall(800, () => { parts.forEach((p) => p.destroy()); this.flash.destroy(); this.bar.destroy(); });
   }
 
@@ -287,6 +319,6 @@ export class Unit {
   vanish() {
     this.dead = true;
     this.auraTween?.remove();
-    [this.sprite, this.glow, this.flash, this.shadow, this.aura, this.bar, this.itemIcon, this.itemRing].forEach((p) => p && p.destroy());
+    [this.sprite, this.glow, this.flash, this.shadow, this.aura, this.bar, this.itemIcon, this.itemRing, this.tierFx].forEach((p) => p && p.destroy());
   }
 }

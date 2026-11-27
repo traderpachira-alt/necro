@@ -1,7 +1,7 @@
 // Ruh Kartları: card views, hand layout, flip/reveal and drag-to-play interactions.
 import { RARITIES, CREATURES, RITUALS, CURSES } from './data.js';
 import { drawCreatureCard, drawSpellCard, CARD_W, CARD_H } from './cardart.js';
-import { PORTRAITS } from './boot.js';
+import { PORTRAITS, ensureTier, tierOf } from './boot.js';
 import { sfx } from './audio.js';
 import { HAND_Y, DECK, CARD_SCALE, W } from './layout.js';
 export { HAND_Y };
@@ -12,7 +12,8 @@ export function faceKey(scene, card) {
   const lv = card.level || 1;
   const key = card.kind === 'creature' ? `cf_${card.id}_${card.rarity}_${lv}` : `cf_${card.kind}_${card.id}_${lv}`;
   if (!scene.textures.exists(key)) {
-    const cv = card.kind === 'creature' ? drawCreatureCard(card.id, card.rarity, PORTRAITS[card.id], lv) : drawSpellCard(card.kind, card.id, lv);
+    const pk = card.kind === 'creature' ? ensureTier(scene, card.id, tierOf(lv)) : null;
+    const cv = card.kind === 'creature' ? drawCreatureCard(card.id, card.rarity, PORTRAITS[pk], lv) : drawSpellCard(card.kind, card.id, lv);
     scene.textures.addCanvas(key, cv).setFilter(Phaser.Textures.FilterMode.LINEAR);
   }
   return key;

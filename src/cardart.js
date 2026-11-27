@@ -153,7 +153,8 @@ export function drawCreatureCard(id, rarity, portrait, level = 1) {
   c.imageSmoothingEnabled = false;
   const s = 3.1;
   c.shadowColor = R.color; c.shadowBlur = rarity >= 2 ? 16 : 6;
-  c.drawImage(portrait, 0, 0, 48, 48, CARD_W / 2 - 24 * s + 4, win.y + win.h - 44 * s - 8, 48 * s, 48 * s);
+  const pw = portrait.height; // frame size of the (super-sampled) sheet
+  c.drawImage(portrait, 0, 0, pw, pw, CARD_W / 2 - 24 * s + 4, win.y + win.h - 44 * s - 8, 48 * s, 48 * s);
   c.restore();
   roleIcon(c, C.role, 32, 40, R.color);
   gem(c, CARD_W - 32, 40, R.color);

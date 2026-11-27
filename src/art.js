@@ -200,6 +200,33 @@ const HEADS = {
 };
 
 // ---------- humanoid ----------
+// ---------- evolution decorations (tier 1 = Sv.3-4, tier 2 = Sv.5) ----------
+function crown(p, x, y, gem = '#ff3050') {
+  p.rect(x - 4, y, 9, 2, PAL.gold[1]); p.rect(x - 4, y, 9, 1, PAL.gold[2]);
+  for (const dx of [-4, 0, 4]) { p.line(x + dx, y, x + dx, y - 3, PAL.gold[1], 1.2); p.fpx(x + dx + 0.3, y - 3.2, PAL.gold[2]); }
+  p.fglow(x + 0.5, y + 0.8, gem); p.halo(x, y, 2, gem, 90);
+}
+function horns(p, x, y, col = PAL.bone) {
+  for (const s2 of [-1, 1]) {
+    const bx = x + s2 * 3;
+    p.line(bx, y + 1, bx + s2 * 2, y - 3, col[1], 1.8);
+    p.line(bx + s2 * 2, y - 3, bx + s2 * 1, y - 6, col[2], 1.2);
+  }
+}
+function runeMarks(p, pts, col) { for (const [x, y] of pts) { p.fglow(x, y, col); p.fglow(x + 0.5, y, col); } p.halo(pts[0][0], pts[0][1], 2, col, 70); }
+function tierize(c, tier, key) {
+  if (!tier) return c;
+  const t = { ...c, tier };
+  t.rune = c.rune || c.eye || { butcher: '#ff3030', guard: '#6ff7ff', archer: '#6ff7ff' }[key] || '#7dff6a';
+  if (!t.pauldron) t.pauldron = c.head === 'skull' ? PAL.bone : PAL.darkSteel;
+  if (tier >= 2) {
+    if (!t.cape) t.cape = ['#1a0a20', '#4a1a40', '#7a2a60'];
+    t.glowWeapon = true;
+    t.crownType = { butcher: 'horns', archer: 'horns' }[key] || 'crown';
+  }
+  return t;
+}
+
 function humanoid(p, c, ps, f) {
   const cx = 21 + ps.lean, hip = 32 + ps.bob, sh = 21 + ps.bob;
   const legs = c.legs || PAL.leather, boots = c.boots || PAL.leather;
@@ -233,7 +260,9 @@ function humanoid(p, c, ps, f) {
   if (c.pauldron) { p.ball(cx - 3, sh + 1, 3, 2.5, c.pauldron); p.ball(cx + 3, sh + 1, 3, 2.5, c.pauldron); }
   // shield (held on back arm, drawn in front of body)
   if (c.shield) shield(p, cx + 6, sh + 8 + ps.bob * 0, c.shield, c.emblem, c.kite);
+  if (c.tier) runeMarks(p, [[cx - 1.5, sh + 4], [cx + 1, sh + 6.5], [cx - 0.5, sh + 9]], c.rune);
   HEADS[c.head](p, cx + 1, sh - 5, f, c.eye);
+  if (c.tier >= 2) { if (c.crownType === 'horns') horns(p, cx + 1, sh - 9); else crown(p, cx + 1, sh - 11); }
   // front arm + weapon
   if (c.weapon === 'bow') {
     const hand = arm(p, cx + 3, sh + 2, -0.05, 9, c.sleeve || c.body, c.hand || PAL.skin);
@@ -243,14 +272,22 @@ function humanoid(p, c, ps, f) {
     for (let k = -8; k <= 8; k++) { const bx = hx + Math.round(2.5 * Math.cos((k / 8) * 1.4)); p.px(bx, hy + k, k % 3 === 0 ? PAL.bone[2] : PAL.wood[1]); p.px(bx + 1, hy + k, PAL.wood[0]); }
     p.line(hx, hy - 8, hx - pull, hy, '#e8e4d8'); p.line(hx - pull, hy, hx, hy + 8, '#e8e4d8');
     if (ps.draw > 0) { p.line(hx - pull, hy, hx + 6, hy, PAL.bone[1]); p.glow(hx + 6, hy, '#9ff7ff'); p.halo(hx + 6, hy, 2, '#6ff7ff', 90); }
+    if (c.glowWeapon) { for (let k = -7; k <= 7; k += 2) p.fglow(hx + 2.5 * Math.cos((k / 8) * 1.4) + 0.5, hy + k + 0.5, c.rune); p.halo(hx + 2, hy, 4, c.rune, 60); }
     arm(p, cx - 1, sh + 3, -0.1 + ps.draw * 0.2, 6 - pull * 0.6 + 4, c.sleeve || c.body, c.hand || PAL.skin);
     return;
   }
   const aF = c.weapon === 'staff' ? 1.15 - ps.cast * 1.0 : ps.aF;
   const hand = arm(p, cx + 3, sh + 2, aF, c.armLen || 8, c.sleeve || c.body, c.hand || PAL.skin);
   const [hx, hy] = hand;
-  if (c.weapon === 'sword') sword(p, hx, hy, ps.wA, 11, PAL.steel, PAL.gold, PAL.leather);
-  if (c.weapon === 'rustsword') sword(p, hx, hy, ps.wA, 10, PAL.boneDark, PAL.darkSteel, PAL.wood);
+  const tl = c.tier || 0;
+  if (c.weapon === 'sword') sword(p, hx, hy, ps.wA, 11 + tl, PAL.steel, PAL.gold, PAL.leather);
+  if (c.weapon === 'rustsword') sword(p, hx, hy, ps.wA, 10 + tl * 1.5, tl ? PAL.steel : PAL.boneDark, tl ? PAL.gold : PAL.darkSteel, PAL.wood);
+  if (c.glowWeapon && (c.weapon === 'sword' || c.weapon === 'rustsword')) {
+    const L = 10 + tl * 1.5, dx = Math.cos(ps.wA), dy = Math.sin(ps.wA);
+    p.glowLine(hx + dx * 2, hy + dy * 2, hx + dx * L, hy + dy * L, c.rune);
+    p.halo(hx + dx * L * 0.7, hy + dy * L * 0.7, 3, c.rune, 70);
+  }
+  if (c.glowWeapon && c.weapon === 'cleaver') p.halo(hx + Math.cos(ps.wA) * 7, hy + Math.sin(ps.wA) * 7, 4, c.rune, 90);
   if (c.weapon === 'greatsword') { sword(p, hx, hy, ps.wA, 15, PAL.steel, PAL.gold, PAL.red); if (ps.cast > 0.7) p.halo(hx + Math.cos(ps.wA) * 10, hy + Math.sin(ps.wA) * 10, 3, '#ffd36a', 70); }
   if (c.weapon === 'cleaver') {
     const dx = Math.cos(ps.wA), dy = Math.sin(ps.wA);
@@ -333,6 +370,20 @@ function golem(p, i, o = {}) {
   p.ball(h[0], h[1], 3.5, 3.5, F);
   p.px(h[0] + 1, h[1] - 2, PAL.bone[2]);
   if (anim === 'attack' && f === 2) { for (let k = 0; k < 7; k++) p.halo(h[0] + 2, 44, 4, '#c8a070', 60); }
+  const tier = o.tier || 0;
+  if (tier >= 1) {
+    for (const sx of [-1, 1]) {
+      const ox = cx + sx * 7, oy = sh + 1;
+      p.ball(ox, oy, 2.6, 1.8, PAL.boneDark);
+      for (let k = 0; k < 3; k++) p.poly([[ox - 2 + k * 2, oy - 0.5], [ox - 0.6 + k * 2, oy - 0.5], [ox - 1.6 + k * 2 + sx * 0.6, oy - 3.4]], PAL.bone[k === 1 ? 2 : 1]);
+    }
+    runeMarks(p, [[cx - 4, sh + 6], [cx - 1, sh + 9], [cx + 2, sh + 7]], o.eye || '#ffb340');
+  }
+  if (tier >= 2) {
+    horns(p, cx + 5, sh - 3);
+    p.halo(h[0], h[1], 4, o.eye || '#ffb340', 90);
+    for (let k = 0; k < 4; k++) p.fglow(h[0] - 1.5 + k, h[1] - 0.5, o.eye || '#ffb340');
+  }
 }
 
 function wolf(p, i, o = {}) {
@@ -375,9 +426,20 @@ function wolf(p, i, o = {}) {
   p.glow(hx + 2, hy - 1, '#ffffff'); p.glow(hx + 3, hy - 1, EYE); p.halo(hx + 3, hy - 1, 3, EYE, 100);
   // ghost glow on body edge
   for (let k = 0; k < 6; k++) p.softGlow(cx - 6 + k * 3, by - 7, o.aura || '#5fd8ff', 60);
+  const tier = o.tier || 0;
+  if (tier >= 1) {
+    // bone spine ridge
+    for (let k = 0; k < 5; k++) { const sx = cx - 8 + k * 3.5, sy = by - 5.5; p.poly([[sx - 1.2, sy + 0.8], [sx + 1.2, sy + 0.8], [sx + 0.6, sy - 2.6]], k % 2 ? PAL.bone[1] : PAL.bone[2]); }
+    p.line(hx - 2, hy + 2.5, hx + 2, hy + 3.5, PAL.bone[1], 1.2);
+  }
+  if (tier >= 2) {
+    horns(p, hx - 1, hy - 4);
+    for (let k = 0; k < 7; k++) { const fx = hx - 4 - k * 2.2, fy = hy - 3 + k * 0.7 - ((k + f) % 3); p.fglow(fx, fy, k % 2 ? EYE : '#ffffff'); p.fglow(fx + 0.5, fy + 0.5, EYE); }
+    p.halo(hx + 3, hy - 1, 5, EYE, 110);
+  }
 }
 
-function banshee(p, i) {
+function banshee(p, i, tier = 0) {
   const [anim, f] = animOf(i);
   const G = ['#3a5a74', '#8ec8dc', '#e6fbff'];
   let bob = [0, -1, -2, -1][f], arms = 0;
@@ -415,6 +477,11 @@ function banshee(p, i) {
   p.glow(cx + 3, top + 3, '#7affd8'); p.px(cx + 3, top + 5, '#2a3a4a'); p.px(cx + 2, top + 6, '#2a3a4a');
   p.halo(cx + 3, top + 3, 2, '#4affd0', 90);
   for (let k = 0; k < 5; k++) p.softGlow(cx - 4 + k * 2, 40 + (k % 2), '#7ff8ff', 50);
+  if (tier >= 1) { for (let k = 0; k < 5; k++) p.fglow(cx - 1.5 + k * 1.1, top + 8.2 + Math.abs(k - 2) * 0.5, '#7affd8'); }
+  if (tier >= 2) {
+    for (let k = -3; k <= 3; k++) { const h2 = 3 - Math.abs(k) * 0.6 + ((k + f) % 2); p.glowLine(cx + 1 + k, top - 2, cx + 1 + k, top - 2 - h2, k % 2 ? '#7affd8' : '#e6fffa'); }
+    p.halo(cx + 1, top - 3, 5, '#5cffc8', 110);
+  }
 }
 
 // ---------- configs ----------
@@ -438,6 +505,7 @@ export const SPRITE_KEYS = ['necro', 'guard', 'golem', 'butcher', 'wolf', 'arche
 
 // copy the opaque pixels of `src` (rows < maxRow) onto `dst`, shifted by (dx, dy)
 function overlay(dst, src, dx, dy, maxRow) {
+  const k = src.k; dx *= k; dy *= k; maxRow *= k;
   for (let y = 0; y < Math.min(maxRow, src.h); y++) for (let x = 0; x < src.w; x++) {
     const i = (y * src.w + x) * 4;
     const tx = x + dx, ty = y + dy;
@@ -448,26 +516,24 @@ function overlay(dst, src, dx, dy, maxRow) {
   }
 }
 
-export function buildFrames(key) {
+export function buildFrames(key, tier = 0) {
   const out = [];
-  for (let i = 0; i < FRAMES; i++) {
-    out.push(rawFrame(key, i).finalize());
-  }
+  for (let i = 0; i < FRAMES; i++) out.push(rawFrame(key, i, tier).finalize());
   return out;
 }
 
-function rawFrame(key, i) {
+function rawFrame(key, i, tier = 0) {
   const p = new Painter(48, 48);
-  if (key === 'golem') golem(p, i);
-  else if (key === 'giant') golem(p, i, { pal: ['#3a4a2a', '#6a7d48', '#9aac74'], eye: '#ff4030', blood: true });
-  else if (key === 'catapult') golem(p, i, { pal: ['#4a4440', '#8a8070', '#b8ac98'], eye: '#6ff7ff', catapult: true });
-  else if (key === 'wolf') wolf(p, i);
-  else if (key === 'hound') wolf(p, i, { pal: ['#1e4a3a', '#3fd8a0', '#c0ffe8'], eye: '#b8ffd0', aura: '#4affb0' });
+  if (key === 'golem') golem(p, i, { tier });
+  else if (key === 'giant') golem(p, i, { pal: ['#3a4a2a', '#6a7d48', '#9aac74'], eye: '#ff4030', blood: true, tier });
+  else if (key === 'catapult') golem(p, i, { pal: ['#4a4440', '#8a8070', '#b8ac98'], eye: '#6ff7ff', catapult: true, tier });
+  else if (key === 'wolf') wolf(p, i, { tier });
+  else if (key === 'hound') wolf(p, i, { pal: ['#1e4a3a', '#3fd8a0', '#c0ffe8'], eye: '#b8ffd0', aura: '#4affb0', tier });
   else if (key === 'cavalry') {
-    wolf(p, i, { pal: ['#3a3446', '#8a8098', '#cfc6dc'], eye: '#6ff7ff' });
-    const rider = rawFrame('guard', i < 8 ? i % 4 : i);
+    wolf(p, i, { pal: ['#3a3446', '#8a8098', '#cfc6dc'], eye: '#6ff7ff', tier });
+    const rider = rawFrame('guard', i < 8 ? i % 4 : i, tier);
     overlay(p, rider, -4, -10, 32);
-  } else if (key === 'banshee') banshee(p, i);
-  else { const [anim, f] = animOf(i); humanoid(p, HUMANOIDS[key], posesHumanoid(anim, f), f); }
+  } else if (key === 'banshee') banshee(p, i, tier);
+  else { const [anim, f] = animOf(i); humanoid(p, tierize(HUMANOIDS[key], tier, key), posesHumanoid(anim, f), f); }
   return p;
 }

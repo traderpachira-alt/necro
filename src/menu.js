@@ -2,6 +2,7 @@
 import { txt, Button } from './game.js';
 import { W, H, BF, PANEL_Y } from './layout.js';
 import { ZOOM, setLowRes } from './fonts.js';
+import { SS } from './pixel.js';
 import { META, CREATURES, RECIPES } from './data.js';
 import { save, persist, metaLevel, cloud, onCloudChange, getToken, setToken, pullCloud, pushCloud } from './save.js';
 import { sfx, unlockAudio, toggleMute, isMuted } from './audio.js';
@@ -14,22 +15,22 @@ export class MenuScene extends Phaser.Scene {
   create() {
     this.cameras.main.setZoom(ZOOM).centerOn(W / 2, H / 2);
     this.lightsOn = this.sys.renderer.type === Phaser.WEBGL;
-    const bg = this.add.image(0, -BF, 'bg').setOrigin(0).setScale(2);
+    const bg = this.add.image(0, -BF, 'bg').setOrigin(0);
     if (this.lightsOn) {
       bg.setPipeline('Light2D');
       this.lights.enable().setAmbientColor(0x3a3450);
       this.lights.addLight(420, 172 - BF, 700, 0x9aa8ff, 0.8);
       this.staff = this.lights.addLight(282, 330 - BF, 300, 0x6dff6a, 2);
     }
-    this.add.image(0, -BF, 'bg_g').setOrigin(0).setScale(2).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.9);
+    this.add.image(0, -BF, 'bg_g').setOrigin(0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.9);
     this.add.image(0, PANEL_Y, 'panel').setOrigin(0);
     this.add.particles(0, 0, 'soft', {
       x: { min: 0, max: W }, y: { min: 250 - BF, max: 560 - BF }, lifespan: 5000, speedY: { min: -18, max: -6 }, speedX: { min: -6, max: 6 },
       scale: { start: 0.22, end: 0 }, alpha: { start: 0.8, end: 0 }, tint: [0x7dff6a, 0x9b7bd8, 0x6ff7ff], blendMode: 'ADD', frequency: 140,
     });
-    const necro = this.add.sprite(270, 520 - BF, 'necro', 0).setOrigin(0.5, 44 / 48).setScale(4).play('necro_idle');
+    const necro = this.add.sprite(270, 520 - BF, 'necro', 0).setOrigin(0.5, 44 / 48).setScale(4 / SS).play('necro_idle');
     if (this.lightsOn) necro.setPipeline('Light2D');
-    this.necroGlow = this.add.sprite(270, 520 - BF, 'necro_g', 0).setOrigin(0.5, 44 / 48).setScale(4).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.8);
+    this.necroGlow = this.add.sprite(270, 520 - BF, 'necro_g', 0).setOrigin(0.5, 44 / 48).setScale(4 / SS).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.8);
     this.necro = necro;
     this.add.image(270, 522 - BF, 'shadow').setScale(2.4, 2).setAlpha(0.8).setDepth(-1);
 
@@ -127,7 +128,7 @@ export class MenuScene extends Phaser.Scene {
       const g = this.add_(this.add.graphics().setDepth(8));
       g.fillStyle(found ? 0x1c1030 : 0x100a18, 0.95).fillRoundedRect(16, y - rowH / 2 + 4, W - 32, rowH - 8, 10);
       g.lineStyle(2, found ? 0x9b6bff : 0x2a2036, 1).strokeRoundedRect(16, y - rowH / 2 + 4, W - 32, rowH - 8, 10);
-      const spr = this.add_(this.add.sprite(76, y + rowH / 2 - 14, key, 0).setOrigin(0.5, 44 / 48).setScale(Math.min(2, (rowH - 16) / 44)).setDepth(10));
+      const spr = this.add_(this.add.sprite(76, y + rowH / 2 - 14, key, 0).setOrigin(0.5, 44 / 48).setScale(Math.min(2, (rowH - 16) / 44) / SS).setDepth(10));
       if (found) { spr.play(key + '_idle'); } else spr.setTintFill(0x05030a).setAlpha(0.85);
       const [a, b] = pair.split('|');
       this.add_(txt(this, 140, y - 28, found ? C.name : '??? ', 21, found ? '#e8a8ff' : '#6a5a7a', T).setDepth(10));

@@ -8,6 +8,7 @@ import {
   SYNERGIES, computeSynergies, synergyBonus, TAG_NAMES,
 } from './data.js';
 import { installEvents } from './events.js';
+import { installAtmosphere } from './atmos.js';
 import { installDeckUI } from './deckui.js';
 import { sfx, unlockAudio, toggleMute, isMuted, buzz } from './audio.js';
 import { TITLE, BODY, ZOOM } from './fonts.js';
@@ -124,15 +125,15 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- world
   buildWorld() {
-    const bg = this.add.image(0, -BF, 'bg').setOrigin(0).setScale(2).setDepth(0);
+    const bg = this.add.image(0, -BF, 'bg').setOrigin(0).setDepth(0);
     if (this.lightsOn) {
       bg.setPipeline('Light2D');
-      this.lights.enable().setAmbientColor(0x48405e);
+      this.lights.enable().setAmbientColor(0x5c5478);
       this.lights.addLight(420, 172 - BF, 700, 0x9aa8ff, 0.9);
       this.staffLight = this.lights.addLight(NECRO_POS.x, NECRO_POS.y - 70, 230, 0x6dff6a, 1.6);
       this.holyLight = this.lights.addLight(540, 420 - BF, 260, 0xffd88a, 0.7);
     }
-    this.add.image(0, -BF, 'bg_g').setOrigin(0).setScale(2).setDepth(1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.9);
+    this.add.image(0, -BF, 'bg_g').setOrigin(0).setDepth(1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.9);
     const mg = this.add.image(410, 172 - BF, 'big_soft').setScale(2.2).setTint(0xb8a8ff).setAlpha(0.28).setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
     this.tweens.add({ targets: mg, alpha: 0.18, duration: 3000, yoyo: true, repeat: -1 });
     this.fogs = [];
@@ -150,6 +151,7 @@ export class GameScene extends Phaser.Scene {
     const v = this.add.graphics().setDepth(860);
     for (let i = 0; i < 24; i++) { v.fillStyle(0x000000, 0.03); v.fillRect(0, PANEL_Y - 24 + i, W, 24 - i); }
     this.slotG = this.add.graphics().setDepth(7);
+    this.buildAtmosphere();
   }
 
   buildFx() {
@@ -475,7 +477,8 @@ export class GameScene extends Phaser.Scene {
     this.fxSoul.setParticleTint(color); this.fxSoul.explode(24, t.x, t.y - 30);
     const ring = this.add.image(t.x, t.y, 'ring').setScale(0.2, 0.08).setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(7);
     this.tweens.add({ targets: ring, scaleX: 0.8, scaleY: 0.28, alpha: 0, angle: 120, duration: 800, onComplete: () => ring.destroy() });
-    this.tweens.add({ targets: t.sprite, scaleX: { from: 2.5, to: 2 }, scaleY: { from: 1.6, to: 2 }, duration: 350, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t.sprite, scaleX: { from: t.sc * 1.25, to: t.sc }, scaleY: { from: t.sc * 0.8, to: t.sc }, duration: 350, ease: 'Back.easeOut' });
+    if (t.evolved) { t.evolved = false; this.evolveFx(t); }
     this.floatText(t.x, t.y - 108, text, hexStr(color), 20);
   }
   mergeUnits(a, b) {
@@ -950,7 +953,8 @@ export class GameScene extends Phaser.Scene {
     const counts = {};
     for (const k of this.nextComp || []) counts[k] = (counts[k] || 0) + 1;
     const short = { crusader: 'Kılıççı', knight: 'Şövalye', priest: 'Rahip', hunter: 'Avcı', paladin: 'Paladin', firepriest: 'Ateş Rahibi', inquisitor: 'ENGİZİSYONCU', archangel: 'BAŞMELEK' };
-    return Object.entries(counts).map(([k, n]) => `${n} ${short[k] || ENEMIES[k].name}`).join(', ');
+    const wx = { rain: '  •  Yağmurlu', storm: '  •  Fırtına' }[this.weather] || '';
+    return Object.entries(counts).map(([k, n]) => `${n} ${short[k] || ENEMIES[k].name}`).join(', ') + wx;
   }
 
   startPrep() {
@@ -958,6 +962,7 @@ export class GameScene extends Phaser.Scene {
     this.wave++;
     this.drawsThisPrep = 0;
     this.nextComp = waveComposition(this.wave);
+    this.rollWeather();
     this.tutorialHint();
     this.phaseText.setText('Hazırlık');
     this.banner(`DALGA ${this.wave}`, '#d8c8ff', this.wave % 5 === 0 ? 'Engizisyoncu geliyor!' : 'Hazırlık evresi');
@@ -1366,6 +1371,7 @@ export class GameScene extends Phaser.Scene {
   update(time, delta) {
     const dt = Math.min(0.05, delta / 1000) * this.speedMul;
     for (const f of this.fogs) { f.x += f.vx * dt * 0.5; if (f.x - f.displayWidth / 2 > W) f.x = -f.displayWidth / 2; }
+    this.updateAtmosphere(dt);
     if (this.staffLight && !this.necro.dead) {
       this.staffLight.x = this.necro.x + 8; this.staffLight.y = this.necro.y - 76;
       this.staffLight.intensity = 1.5 + Math.sin(time / 300) * 0.25 + (this.necro.attacking ? 0.8 : 0);
@@ -1422,3 +1428,17 @@ GameScene.prototype.tutorialHint = function () {
   if (!tips) { save.tutorialDone = true; persist(); return; }
   tips.forEach((t, i) => this.time.delayedCall(1800 + i * 2600, () => { if (this.state === 'prep') this.notify(t, '#c8b0ff'); }));
 };
+
+// dramatic transformation when a creature reaches a new evolution tier (Sv.3 / Sv.5)
+GameScene.prototype.evolveFx = function (u) {
+  const col = u.tier === 2 ? 0xffd36a : 0x9b6bff;
+  sfx.legendary(); buzz([30, 40, 60]);
+  this.cameras.main.flash(300, u.tier === 2 ? 255 : 200, u.tier === 2 ? 220 : 160, u.tier === 2 ? 140 : 255);
+  const pillar = this.add.image(u.x, u.y, 'beam').setOrigin(0.5, 1).setScale(5, 0).setTint(col).setBlendMode(Phaser.BlendModes.ADD).setDepth(u.y + 1);
+  this.tweens.add({ targets: pillar, scaleY: 4, duration: 260, yoyo: true, hold: 500, onComplete: () => pillar.destroy() });
+  const rays = this.add.image(u.x, u.y - 50, 'rays').setTint(col).setBlendMode(Phaser.BlendModes.ADD).setScale(0.2).setAlpha(0.9).setDepth(u.y + 2);
+  this.tweens.add({ targets: rays, scale: 1.1, angle: 120, alpha: 0, duration: 1200, onComplete: () => rays.destroy() });
+  this.fxSwirl.setParticleTint(col); this.fxSwirl.explode(50, u.x, u.y - 50);
+  this.floatText(u.x, u.y - 130, u.tier === 2 ? 'EFSANEVİ FORM!' : 'EVRİM!', u.tier === 2 ? '#ffd36a' : '#c8b0ff', 22);
+};
+installAtmosphere(GameScene.prototype);

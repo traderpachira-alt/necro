@@ -59,6 +59,8 @@ export const sfx = {
   waveStart() { [0, 0.25, 0.5].forEach((d, i) => { noise({ dur: 0.2, vol: 0.4, freq: 120, type: 'lowpass', delay: d }); tone({ type: 'sine', f0: 70 - i * 5, f1: 40, dur: 0.25, vol: 0.4, delay: d }); }); tone({ type: 'sawtooth', f0: 220, dur: 0.6, vol: 0.06, delay: 0.75 }); tone({ type: 'sawtooth', f0: 330, dur: 0.6, vol: 0.05, delay: 0.75 }); },
   waveClear() { [523, 659, 784, 1046].forEach((f, i) => tone({ type: 'square', f0: f, dur: 0.15, vol: 0.07, delay: i * 0.1 })); },
   gameOver() { [392, 349, 311, 262].forEach((f, i) => tone({ type: 'sawtooth', f0: f, f1: f * 0.98, dur: 0.4, vol: 0.1, delay: i * 0.3 })); },
+  thunder() { noise({ dur: 2.2, vol: 0.55, freq: 220, type: 'lowpass', f1: 50 }); noise({ dur: 0.4, vol: 0.3, freq: 1200, q: 0.5, delay: 0.05 }); },
+  rain() {},
   soul() { if (throttle('soul', 50)) return; tone({ type: 'sine', f0: 1200, f1: 1800, dur: 0.08, vol: 0.05 }); },
   error() { tone({ type: 'square', f0: 160, f1: 120, dur: 0.15, vol: 0.1 }); },
 };
