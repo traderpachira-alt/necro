@@ -22,7 +22,7 @@ export const CREATURES = {
   golem: { name: 'Ceset Golemi', role: 'tank', hp: 310, atk: 18, cd: 1.8, range: 40, speed: 28, aoe: 55, desc: 'Yavaş ama yumruğu alan hasarı verir.' },
   butcher: { name: 'Zombi Kasap', role: 'attacker', hp: 150, atk: 26, cd: 1.0, range: 32, speed: 50, desc: 'Yüksek yakın dövüş hasarı.' },
   wolf: { name: 'Hayalet Kurt', role: 'attacker', hp: 105, atk: 15, cd: 0.6, range: 30, speed: 95, crit: 0.3, desc: 'Çok hızlı, %30 kritik vuruş.' },
-  archer: { name: 'Kemik Okçu', role: 'ranger', hp: 85, atk: 15, cd: 1.2, range: 290, speed: 0, proj: 'arrow', desc: 'Uzaktan kemik ok atar.' },
+  archer: { name: 'Kemik Okçu', role: 'ranger', hp: 85, atk: 15, cd: 1.2, range: 310, speed: 0, proj: 'arrow', desc: 'Uzaktan kemik ok atar.' },
   banshee: { name: "Ruh Banshee'si", role: 'healer', hp: 95, atk: 7, cd: 1.5, range: 230, speed: 0, proj: 'wisp', heal: 20, healCd: 2.5, desc: 'Yaralı dostlarını iyileştirir.' },
   // hybrids (only via Kemik Füzyonu)
   cavalry: { name: 'Kemik Süvarisi', role: 'tank', hp: 330, atk: 22, cd: 1.0, range: 34, speed: 85, taunt: true, charge: true, hybrid: true, desc: 'Hızlı tank. Her dalgadaki ilk saldırısı 2 kat hasar verir.' },

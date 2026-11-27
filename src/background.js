@@ -43,7 +43,7 @@ export function paintBackground() {
     else put(x, y, b > 0.5 ? '#b8a8e8' : '#6c5c98', 160 + b * 90);
   }
   // moon with halo
-  const mx = 205, my = 40, mr = 17;
+  const mx = 205, my = 86, mr = 17;
   for (let y = -mr * 3; y <= mr * 3; y++) for (let x = -mr * 3; x <= mr * 3; x++) {
     const dd = Math.sqrt(x * x + y * y);
     if (dd > mr && dd < mr * 3) put(mx + x, my + y, '#b8a0e8', Math.max(0, 40 * (1 - (dd - mr) / (mr * 2))));
@@ -60,7 +60,7 @@ export function paintBackground() {
   }
   // clouds over moon
   for (let k = 0; k < 5; k++) {
-    const cy = 30 + k * 9 + r() * 6, cx0 = r() * W, len = 40 + r() * 60;
+    const cy = 66 + k * 9 + r() * 6, cx0 = r() * W, len = 40 + r() * 60;
     for (let x = 0; x < len; x++) {
       const th = Math.sin((x / len) * Math.PI) * (3 + r() * 0.5);
       for (let y = 0; y < th; y++) put(cx0 + x, cy - y, y < 1 ? '#5a4478' : '#3a2858', 170);

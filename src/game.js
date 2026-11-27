@@ -7,13 +7,13 @@ import {
 } from './data.js';
 import { sfx, unlockAudio, toggleMute, isMuted } from './audio.js';
 import { TITLE, BODY, ZOOM } from './fonts.js';
-import { W, H, PANEL_Y, INFO_Y, INFO_H, BTN_Y, DECK } from './layout.js';
+import { W, H, BF, PANEL_Y, INFO_Y, INFO_H, BTN_Y, DECK } from './layout.js';
 import { save, metaLevel, recordRun, discover } from './save.js';
 import { drawBoonFrame, BOON_W, BOON_H } from './cardart.js';
 
-const SLOT_COLS = [150, 218, 286];
-const SLOT_ROWS = [438, 510];
-const NECRO_POS = { x: 70, y: 476 };
+const SLOT_COLS = [142, 226, 310];
+const SLOT_ROWS = [428 - BF, 516 - BF];
+const NECRO_POS = { x: 64, y: 476 - BF };
 
 export function txt(scene, x, y, s, size, color = '#f2e8ff', extra = {}) {
   const { title, ...rest } = extra;
@@ -109,27 +109,27 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- world
   buildWorld() {
-    const bg = this.add.image(0, 0, 'bg').setOrigin(0).setScale(2).setDepth(0);
+    const bg = this.add.image(0, -BF, 'bg').setOrigin(0).setScale(2).setDepth(0);
     if (this.lightsOn) {
       bg.setPipeline('Light2D');
       this.lights.enable().setAmbientColor(0x48405e);
-      this.lights.addLight(420, 60, 700, 0x9aa8ff, 0.9);
+      this.lights.addLight(420, 172 - BF, 700, 0x9aa8ff, 0.9);
       this.staffLight = this.lights.addLight(NECRO_POS.x, NECRO_POS.y - 70, 230, 0x6dff6a, 1.6);
-      this.holyLight = this.lights.addLight(540, 420, 260, 0xffd88a, 0.7);
+      this.holyLight = this.lights.addLight(540, 420 - BF, 260, 0xffd88a, 0.7);
     }
-    this.add.image(0, 0, 'bg_g').setOrigin(0).setScale(2).setDepth(1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.9);
-    const mg = this.add.image(410, 80, 'big_soft').setScale(2.2).setTint(0xb8a8ff).setAlpha(0.28).setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
+    this.add.image(0, -BF, 'bg_g').setOrigin(0).setScale(2).setDepth(1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.9);
+    const mg = this.add.image(410, 172 - BF, 'big_soft').setScale(2.2).setTint(0xb8a8ff).setAlpha(0.28).setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
     this.tweens.add({ targets: mg, alpha: 0.18, duration: 3000, yoyo: true, repeat: -1 });
     this.fogs = [];
     for (let i = 0; i < 7; i++) {
       const front = i >= 4;
-      const f = this.add.image(Math.random() * W, front ? 530 + Math.random() * 30 : 330 + Math.random() * 120, 'fog')
+      const f = this.add.image(Math.random() * W, (front ? 530 + Math.random() * 30 : 330 + Math.random() * 120) - BF, 'fog')
         .setScale(2 + Math.random(), 1.2 + Math.random() * 0.6).setAlpha(front ? 0.1 : 0.16).setTint(0xb8a8e0).setDepth(front ? 800 : 3).setBlendMode(Phaser.BlendModes.SCREEN);
       f.vx = (front ? 10 : 5) + Math.random() * 8;
       this.fogs.push(f);
     }
     this.add.particles(0, 0, 'soft', {
-      x: { min: 0, max: W }, y: { min: 300, max: 560 }, lifespan: 5000, speedY: { min: -14, max: -4 }, speedX: { min: -6, max: 6 },
+      x: { min: 0, max: W }, y: { min: 300 - BF, max: 560 - BF }, lifespan: 5000, speedY: { min: -14, max: -4 }, speedX: { min: -6, max: 6 },
       scale: { start: 0.18, end: 0 }, alpha: { start: 0.7, end: 0 }, tint: [0x7dff6a, 0x9b7bd8, 0x6ff7ff], blendMode: 'ADD', frequency: 260,
     }).setDepth(850);
     const v = this.add.graphics().setDepth(860);
@@ -182,7 +182,7 @@ export class GameScene extends Phaser.Scene {
 
     this.unitCountText = txt(this, W - 14, PANEL_Y - 30, '', 17, '#ddd0f4').setOrigin(1, 0).setDepth(1001);
     this.fusionText = txt(this, 14, PANEL_Y - 30, '', 17, '#e8a8ff').setDepth(1001);
-    this.input.on('pointerdown', (p, objs) => { if (!objs.length && this.hand.selected) this.select(null); });
+    this.input.on('pointerdown', (p, objs) => { if (!objs.length && (this.hand.selected || this.selUnit)) this.select(null); });
   }
 
   setInfo(title, body, color = '#fff2d0') { this.infoTitle.setText(title).setColor(color); this.infoBody.setText(body); }
@@ -200,8 +200,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   banner(text, color = '#f2e8ff', sub = '') {
-    const t = txt(this, W / 2, 205, text, 42, color, T).setOrigin(0.5).setDepth(1450).setScale(0.4).setAlpha(0);
-    const s = sub ? txt(this, W / 2, 252, sub, 20, '#ddd0f4').setOrigin(0.5).setDepth(1450).setAlpha(0) : null;
+    const t = txt(this, W / 2, 150, text, 42, color, T).setOrigin(0.5).setDepth(1450).setScale(0.4).setAlpha(0);
+    const s = sub ? txt(this, W / 2, 196, sub, 20, '#ddd0f4').setOrigin(0.5).setDepth(1450).setAlpha(0) : null;
     this.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 300, ease: 'Back.easeOut' });
     if (s) this.tweens.add({ targets: s, alpha: 1, duration: 300, delay: 150 });
     this.tweens.add({ targets: [t, s].filter(Boolean), alpha: 0, y: '-=20', delay: 1500, duration: 400, onComplete: () => { t.destroy(); s?.destroy(); } });
@@ -263,7 +263,11 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.on('gameobjectup', (p, obj) => {
       const u = unitOf(obj);
-      if (u) { if (u.wasDragged) { u.wasDragged = false; return; } this.showUnitInfo(u); return; }
+      if (u) {
+        if (u.wasDragged) { u.wasDragged = false; return; }
+        if (this.state === 'prep' && u.team === 'ally' && !u.isNecro && !u.hidden) this.selectUnit(u); else this.showUnitInfo(u);
+        return;
+      }
       const v = viewOf(obj); if (!v) return;
       if (v.wasDragged) { v.wasDragged = false; return; }
       if (this.state !== 'prep' || v.busy) return;
@@ -277,7 +281,7 @@ export class GameScene extends Phaser.Scene {
   dropHint(on, v, x, y) {
     if (!this.dropZone) {
       this.dropZone = this.add.graphics().setDepth(1340);
-      this.dropText = txt(this, W / 2, 330, '', 24, '#fff2d0', T).setOrigin(0.5).setDepth(1341);
+      this.dropText = txt(this, W / 2, 250, '', 24, '#fff2d0', T).setOrigin(0.5).setDepth(1341);
     }
     this.dropZone.clear(); this.dropText.setText('');
     this.highlightUnit(null);
@@ -308,7 +312,7 @@ export class GameScene extends Phaser.Scene {
   }
   unitDrag(u, dx, dy) {
     if (u.noDrag) return;
-    u.x = Phaser.Math.Clamp(dx, 20, W - 20); u.y = Phaser.Math.Clamp(dy + 14, 380, 548);
+    u.x = Phaser.Math.Clamp(dx, 20, W - 20); u.y = Phaser.Math.Clamp(dy + 14, 380 - BF, 548 - BF);
     const t = this.unitAt(u.x, u.y, u);
     let label = '', col = 0xffffff;
     if (t) {
@@ -432,8 +436,8 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.flash(300, 230, 170, 255);
       this.levelUpFx(u, CREATURES[hybrid].name.toUpperCase(), 0xe8a8ff);
       if (discover(hybrid)) {
-        const t = txt(this, W / 2, 180, 'YENİ HİBRİT KEŞFEDİLDİ!', 30, '#e8a8ff', T).setOrigin(0.5).setDepth(1460).setScale(0.3);
-        const t2 = txt(this, W / 2, 220, `${CREATURES[hybrid].name} Grimuar'a eklendi`, 19, '#f2e8ff').setOrigin(0.5).setDepth(1460).setAlpha(0);
+        const t = txt(this, W / 2, 140, 'YENİ HİBRİT KEŞFEDİLDİ!', 30, '#e8a8ff', T).setOrigin(0.5).setDepth(1460).setScale(0.3);
+        const t2 = txt(this, W / 2, 180, `${CREATURES[hybrid].name} Grimuar'a eklendi`, 19, '#f2e8ff').setOrigin(0.5).setDepth(1460).setAlpha(0);
         this.tweens.add({ targets: t, scale: 1, duration: 400, ease: 'Back.easeOut' });
         this.tweens.add({ targets: t2, alpha: 1, delay: 200, duration: 300 });
         this.tweens.add({ targets: [t, t2], alpha: 0, delay: 2400, duration: 400, onComplete: () => { t.destroy(); t2.destroy(); } });
@@ -455,12 +459,40 @@ export class GameScene extends Phaser.Scene {
     const R = RARITIES[u.rarity];
     let hint = u.level < MAX_LEVEL ? `Aynı türden Sv.${u.level} bir yaratığa sürükle → Sv.${u.level + 1}.` : 'Azami seviye.';
     if (this.fusionCharges > 0 && !u.base.hybrid) hint += ' Füzyon hakkın var: farklı türe sürükle.';
+    if (this.state === 'prep') hint += ' İstemiyorsan toprağa gömebilirsin.';
     this.setInfo(`${u.name}  •  Sv.${u.level} ${R.name}`,
       `Can ${Math.round(u.hp)}/${u.maxHp}  Hasar ${Math.round(u.atk)}${u.heal ? `  İyileştirme ${Math.round(u.heal)}` : ''} — ${u.base.desc} ${this.state === 'prep' ? hint : ''}`, R.color);
   }
 
   // ---------------------------------------------------------------- card selection & actions
+  buryValue(u) { return 2 + u.rarity * 3 + (u.level - 1) * 4; }
+
+  selectUnit(u) {
+    this.select(null);
+    this.selUnit = u;
+    this.highlightUnit(u, 0xb8ffc8);
+    this.showUnitInfo(u);
+    this.btnDraw.show(false); this.btnStart.show(false);
+    this.btnA.show(true).set('TOPRAĞA GÖM', `+${this.buryValue(u)} ruh`).setColor(0x8a2a3a).setEnabled(true);
+    this.btnB.show(true).set('KAPAT').setColor(0x4a4258).setEnabled(true);
+  }
+
+  buryUnit(u) {
+    const val = this.buryValue(u);
+    if (u.slot) { u.slot.unit = null; u.slot = null; }
+    u.hidden = true; u.noSync = true; u.bar.clear();
+    sfx.bones();
+    this.fxDirt.explode(24, u.x, u.y);
+    this.fxSoul.setParticleTint(0x7dff6a); this.fxSoul.explode(14, u.x, u.y - 30);
+    this.tweens.add({ targets: [u.sprite, u.glow], y: u.y + 40, scaleY: 0.4, alpha: 0, duration: 450, ease: 'Quad.easeIn', onComplete: () => u.vanish() });
+    if (u.aura) this.tweens.add({ targets: u.aura, alpha: 0, duration: 300 });
+    this.tweens.add({ targets: u.shadow, alpha: 0, duration: 400 });
+    this.addSouls(val, u.x, u.y - 40);
+    this.time.delayedCall(500, () => this.updateHUD());
+  }
+
   select(v, silent) {
+    if (this.selUnit) { this.highlightUnit(null); this.selUnit = null; }
     this.hand.selected = v;
     if (!silent) this.hand.layout();
     if (!v) {
@@ -502,12 +534,13 @@ export class GameScene extends Phaser.Scene {
   drawCost() { return Math.max(3, CONFIG.drawCost + CONFIG.drawCostStep * this.drawsThisPrep - this.mods.discount); }
 
   cardActionA() {
+    if (this.selUnit) { const u = this.selUnit; this.select(null); if (!u.dead && this.state === 'prep') this.buryUnit(u); return; }
     const v = this.hand.selected; if (!v) return;
     if (v.card.kind === 'curse') {
       if (this.souls < CONFIG.purgeCost) return;
       this.souls -= CONFIG.purgeCost;
       this.burnCard(v, 0x9b6bff);
-      this.floatText(270, 520, 'Lanet arındırıldı', '#c8b0ff', 18);
+      this.floatText(270, 420, 'Lanet arındırıldı', '#c8b0ff', 18);
     } else {
       const cost = this.rerollCost();
       if (this.souls < cost) return;
@@ -518,6 +551,7 @@ export class GameScene extends Phaser.Scene {
     this.select(null);
   }
   cardActionB() {
+    if (this.selUnit) { this.select(null); return; }
     const v = this.hand.selected; if (!v) return;
     const card = v.card;
     if (card.kind === 'curse') { this.select(null); return; }
@@ -585,11 +619,11 @@ export class GameScene extends Phaser.Scene {
     sfx.legendary();
     const dark = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0).setDepth(1290);
     const rays = this.add.image(v.c.x, v.c.y, 'rays').setTint(0xffd36a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1291).setScale(0.2).setAlpha(0.9);
-    const t = txt(this, W / 2, 520, 'EFSANEVİ!', 50, '#ffd36a', T).setOrigin(0.5).setDepth(1460).setScale(0.2);
+    const t = txt(this, W / 2, 420, 'EFSANEVİ!', 50, '#ffd36a', T).setOrigin(0.5).setDepth(1460).setScale(0.2);
     this.tweens.add({ targets: dark, fillAlpha: 0.55, duration: 200, yoyo: true, hold: 900 });
     this.tweens.add({ targets: rays, scale: 2.4, angle: 90, alpha: 0, duration: 1600, ease: 'Cubic.easeOut', onComplete: () => rays.destroy() });
     this.tweens.add({ targets: t, scale: 1, duration: 400, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: t, alpha: 0, y: 490, delay: 1100, duration: 400, onComplete: () => { t.destroy(); dark.destroy(); } });
+    this.tweens.add({ targets: t, alpha: 0, y: 390, delay: 1100, duration: 400, onComplete: () => { t.destroy(); dark.destroy(); } });
     this.cameras.main.flash(250, 255, 220, 140);
     this.cameras.main.shake(300, 0.008);
     this.fxUI.setParticleTint(0xffd36a); this.fxUI.explode(60, v.c.x, v.c.y);
@@ -598,10 +632,10 @@ export class GameScene extends Phaser.Scene {
   playCard(v) {
     if (this.state !== 'prep') { this.hand.layout(); return; }
     const card = v.card;
-    if (card.kind === 'curse') { sfx.error(); this.floatText(270, 520, 'Lanetler dalga başında tetiklenir', '#ff8a80', 16); this.hand.layout(); return; }
+    if (card.kind === 'curse') { sfx.error(); this.floatText(270, 420, 'Lanetler dalga başında tetiklenir', '#ff8a80', 16); this.hand.layout(); return; }
     if (card.kind === 'creature') {
       const slot = this.findSlot(CREATURES[card.id].role);
-      if (!slot) { sfx.error(); this.floatText(270, 520, 'Alan dolu! Birleştir ya da feda et', '#ff8a80', 18); this.select(v); return; }
+      if (!slot) { sfx.error(); this.floatText(270, 420, 'Alan dolu! Birleştir ya da feda et', '#ff8a80', 18); this.select(v); return; }
       slot.reserved = true;
       this.hand.remove(v); this.select(null);
       v.busy = true;
@@ -614,16 +648,16 @@ export class GameScene extends Phaser.Scene {
     }
     this.hand.remove(v); this.select(null);
     v.busy = true;
-    this.tweens.add({ targets: v.c, x: W / 2, y: 300, scale: 1.35, angle: 0, duration: 320, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: v.c, x: W / 2, y: 230, scale: 1.35, angle: 0, duration: 320, ease: 'Cubic.easeOut' });
     this.tweens.add({ targets: v.c, alpha: 0, scale: 1.8, delay: 520, duration: 300, onComplete: () => v.destroy() });
-    this.time.delayedCall(420, () => { this.fxUI.setParticleTint(0x9b6bff); this.fxUI.explode(40, W / 2, 300); this.applyRitual(card.id); });
+    this.time.delayedCall(420, () => { this.fxUI.setParticleTint(0x9b6bff); this.fxUI.explode(40, W / 2, 230); this.applyRitual(card.id); });
     this.hand.layout();
   }
 
   applyRitual(id) {
     sfx.epic();
     const D = RITUALS[id];
-    this.floatText(W / 2, 230, D.name, '#c8b0ff', 24);
+    this.floatText(W / 2, 160, D.name, '#c8b0ff', 24);
     if (id === 'blood') {
       const target = this.hand.cards.find((c) => c.card.kind === 'creature' && c.card.rarity < 3);
       if (target) {
@@ -633,12 +667,12 @@ export class GameScene extends Phaser.Scene {
       } else this.pendingRarity++;
     }
     if (id === 'whisper') this.dealCards(2);
-    if (id === 'bonearmor') { this.buff.shield = 0.3; this.floatText(W / 2, 260, 'Bu dalga: kemik kalkanı', '#9fdcff', 16); }
-    if (id === 'harvest') this.addSouls(20, W / 2, 300);
-    if (id === 'frenzy') { this.buff.atk = 1.25; this.floatText(W / 2, 260, 'Bu dalga: +%25 hasar', '#ff9a6a', 16); }
+    if (id === 'bonearmor') { this.buff.shield = 0.3; this.floatText(W / 2, 190, 'Bu dalga: kemik kalkanı', '#9fdcff', 16); }
+    if (id === 'harvest') this.addSouls(20, W / 2, 230);
+    if (id === 'frenzy') { this.buff.atk = 1.25; this.floatText(W / 2, 190, 'Bu dalga: +%25 hasar', '#ff9a6a', 16); }
     if (id === 'fusion') {
       this.fusionCharges++;
-      this.floatText(W / 2, 260, 'Füzyon hakkı kazandın', '#e8a8ff', 18);
+      this.floatText(W / 2, 190, 'Füzyon hakkı kazandın', '#e8a8ff', 18);
       this.time.delayedCall(600, () => this.setInfo('Kemik Füzyonu', `Farklı türden iki yaratığı (ikisi de en az Sv.${FUSION_MIN_LEVEL}) savaş alanında üst üste sürükle. Keşfettiğin tarifler Grimuar'a yazılır.`, '#e8a8ff'));
     }
     this.updateHUD();
@@ -650,7 +684,7 @@ export class GameScene extends Phaser.Scene {
   slots() {
     if (!this._slots) {
       this._slots = [];
-      SLOT_COLS.forEach((x, ci) => SLOT_ROWS.forEach((y, ri) => this._slots.push({ x: x + (ri ? -14 : 0), y, col: ci, unit: null, reserved: false })));
+      SLOT_COLS.forEach((x, ci) => SLOT_ROWS.forEach((y, ri) => this._slots.push({ x: x + (ri ? -18 : 0), y, col: ci, unit: null, reserved: false })));
     }
     return this._slots;
   }
@@ -737,8 +771,8 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(delay, () => {
         if (!v.revealed) v.reveal(true);
         this.hand.remove(v); v.busy = true;
-        this.tweens.add({ targets: v.c, x: W / 2, y: 300, scale: 1.3, angle: 0, alpha: 1, duration: 320, ease: 'Cubic.easeOut' });
-        this.time.delayedCall(450, () => { this.cameras.main.flash(200, 180, 20, 30); sfx.curse(); this.applyCurse(v.card.id); this.fxUI.setParticleTint(0xe0303a); this.fxUI.explode(40, W / 2, 300); });
+        this.tweens.add({ targets: v.c, x: W / 2, y: 230, scale: 1.3, angle: 0, alpha: 1, duration: 320, ease: 'Cubic.easeOut' });
+        this.time.delayedCall(450, () => { this.cameras.main.flash(200, 180, 20, 30); sfx.curse(); this.applyCurse(v.card.id); this.fxUI.setParticleTint(0xe0303a); this.fxUI.explode(40, W / 2, 230); });
         this.tweens.add({ targets: v.c, alpha: 0, scale: 1.7, delay: 650, duration: 280, onComplete: () => v.destroy() });
         this.hand.layout();
       });
@@ -749,7 +783,7 @@ export class GameScene extends Phaser.Scene {
 
   applyCurse(id) {
     const D = CURSES[id];
-    this.floatText(W / 2, 230, D.name, '#ff6a5a', 24);
+    this.floatText(W / 2, 160, D.name, '#ff6a5a', 24);
     if (id === 'thief') { const n = Math.min(15, this.souls); this.souls -= n; this.floatText(350, 80, `-${n}`, '#ff6a5a', 18); }
     if (id === 'holy') this.enemyMult *= 1.25;
     if (id === 'rot') {
@@ -778,7 +812,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   spawnEnemy(key, hostileCreature = false) {
-    const y = Phaser.Math.Between(420, 530);
+    const y = Phaser.Math.Between(420 - BF, 530 - BF);
     let u;
     if (hostileCreature) {
       const C = CREATURES[key];
@@ -803,7 +837,7 @@ export class GameScene extends Phaser.Scene {
     const bonus = 10 + this.wave * 2;
     this.score += this.wave * 100;
     this.banner('DALGA TEMİZLENDİ', '#9dff8a', `+${bonus} ruh`);
-    this.addSouls(bonus, W / 2, 230);
+    this.addSouls(bonus, W / 2, 160);
     const healers = this.allyCreatures().filter((u) => u.key === 'banshee' || u.key === 'screamer');
     const pct = CONFIG.waveHealPct + healers.reduce((s, b) => s + CONFIG.bansheeWaveHealPct * RARITIES[b.rarity].mult * levelMult(b.level), 0);
     this.units.filter((u) => u.team === 'ally' && !u.dead).forEach((u, i) => {

@@ -1,6 +1,6 @@
 // Main menu: play, permanent upgrades (Kara Ruh), Grimoire of hybrids, high scores, settings / cloud save.
 import { txt, Button } from './game.js';
-import { W, H, PANEL_Y } from './layout.js';
+import { W, H, BF, PANEL_Y } from './layout.js';
 import { ZOOM, setLowRes } from './fonts.js';
 import { META, CREATURES, RECIPES } from './data.js';
 import { save, persist, metaLevel, cloud, onCloudChange, getToken, setToken, pullCloud, pushCloud } from './save.js';
@@ -14,24 +14,24 @@ export class MenuScene extends Phaser.Scene {
   create() {
     this.cameras.main.setZoom(ZOOM).centerOn(W / 2, H / 2);
     this.lightsOn = this.sys.renderer.type === Phaser.WEBGL;
-    const bg = this.add.image(0, 0, 'bg').setOrigin(0).setScale(2);
+    const bg = this.add.image(0, -BF, 'bg').setOrigin(0).setScale(2);
     if (this.lightsOn) {
       bg.setPipeline('Light2D');
       this.lights.enable().setAmbientColor(0x3a3450);
-      this.lights.addLight(420, 60, 700, 0x9aa8ff, 0.8);
-      this.staff = this.lights.addLight(282, 330, 300, 0x6dff6a, 2);
+      this.lights.addLight(420, 172 - BF, 700, 0x9aa8ff, 0.8);
+      this.staff = this.lights.addLight(282, 330 - BF, 300, 0x6dff6a, 2);
     }
-    this.add.image(0, 0, 'bg_g').setOrigin(0).setScale(2).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.9);
+    this.add.image(0, -BF, 'bg_g').setOrigin(0).setScale(2).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.9);
     this.add.image(0, PANEL_Y, 'panel').setOrigin(0);
     this.add.particles(0, 0, 'soft', {
-      x: { min: 0, max: W }, y: { min: 250, max: 560 }, lifespan: 5000, speedY: { min: -18, max: -6 }, speedX: { min: -6, max: 6 },
+      x: { min: 0, max: W }, y: { min: 250 - BF, max: 560 - BF }, lifespan: 5000, speedY: { min: -18, max: -6 }, speedX: { min: -6, max: 6 },
       scale: { start: 0.22, end: 0 }, alpha: { start: 0.8, end: 0 }, tint: [0x7dff6a, 0x9b7bd8, 0x6ff7ff], blendMode: 'ADD', frequency: 140,
     });
-    const necro = this.add.sprite(270, 520, 'necro', 0).setOrigin(0.5, 44 / 48).setScale(4).play('necro_idle');
+    const necro = this.add.sprite(270, 520 - BF, 'necro', 0).setOrigin(0.5, 44 / 48).setScale(4).play('necro_idle');
     if (this.lightsOn) necro.setPipeline('Light2D');
-    this.necroGlow = this.add.sprite(270, 520, 'necro_g', 0).setOrigin(0.5, 44 / 48).setScale(4).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.8);
+    this.necroGlow = this.add.sprite(270, 520 - BF, 'necro_g', 0).setOrigin(0.5, 44 / 48).setScale(4).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.8);
     this.necro = necro;
-    this.add.image(270, 522, 'shadow').setScale(2.4, 2).setAlpha(0.8).setDepth(-1);
+    this.add.image(270, 522 - BF, 'shadow').setScale(2.4, 2).setAlpha(0.8).setDepth(-1);
 
     this.layer = [];
     this.input.once('pointerdown', () => unlockAudio());
@@ -68,9 +68,9 @@ export class MenuScene extends Phaser.Scene {
 
   // ------------------------------------------------------------ main
   main() {
-    const t = this.title('NECROMANCER', 150, 52, '#c8b0ff');
+    const t = this.title('NECROMANCER', 120, 52, '#c8b0ff');
     t.setShadow(0, 0, '#7d5bd8', 18, true, true);
-    this.add_(txt(this, W / 2, 200, 'Ölülerin Efendisi', 20, '#9dff8a').setOrigin(0.5).setDepth(10));
+    this.add_(txt(this, W / 2, 168, 'Ölülerin Efendisi', 20, '#9dff8a').setOrigin(0.5).setDepth(10));
     const y0 = PANEL_Y + 70, gap = Math.min(84, (H - 150 - y0) / 4.5);
     this.btn(W / 2, y0, 320, 72, 'OYNA', 0x2f8a4a, () => { this.cameras.main.fadeOut(300, 5, 3, 10); this.time.delayedCall(320, () => this.scene.start('Game')); });
     this.btn(W / 2, y0 + gap * 1.15, 320, 62, 'YÜKSELTMELER', 0x5a3a9a, () => this.show('upgrades'), `${save.darkSouls} Kara Ruh`);

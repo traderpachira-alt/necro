@@ -1,9 +1,12 @@
 // A battlefield combatant (necromancer, summoned creature or holy enemy).
 import { RARITIES, MAX_LEVEL } from './data.js';
 import { sfx } from './audio.js';
+import { BF } from './layout.js';
 
 const ORIGIN_Y = 44 / 48;
-const ENEMY_MAX_X = 490; // right-most x an enemy may attack from (fully on screen)
+const ENEMY_MAX_X = 490; // right-most x a melee enemy may attack from (fully on screen)
+const RANGED_ENEMY_MAX_X = 400; // ranged enemies step in far enough for our archers to answer
+const LEASH_X = 440; // melee allies do not chase enemies further right than this line
 let UID = 1;
 
 export class Unit {
@@ -145,7 +148,12 @@ export class Unit {
     const dx = target.x - this.x, dy = target.y - this.y;
     const d = Math.hypot(dx, dy * 1.6);
     const reach = this.range + target.radius;
-    const offscreen = this.team === 'enemy' && this.x > ENEMY_MAX_X;
+    const offscreen = this.team === 'enemy' && this.x > (this.base.proj ? RANGED_ENEMY_MAX_X : ENEMY_MAX_X);
+    // melee allies hold the line: they only engage enemies that came close, so archers can shoot
+    if (this.team === 'ally' && this.homeX != null && this.speed > 0 && target.x > LEASH_X) {
+      if (this.walkTo(this.homeX, this.homeY, dt)) this.playAnim('idle');
+      return;
+    }
     if ((d > reach || offscreen) && this.speed > 0) {
       const step = this.speed * dt;
       let vx = (dx / d) * step, vy = (dy / Math.max(1, Math.hypot(dx, dy))) * step * 0.8;
@@ -154,9 +162,9 @@ export class Unit {
       for (const o of game.units) {
         if (o === this || o.dead || o.team !== this.team) continue;
         const ox = this.x - o.x, oy = this.y - o.y, od = Math.hypot(ox, oy);
-        if (od < 26 && od > 0.01) { vx += (ox / od) * step * 0.4; vy += (oy / od) * step * 0.6; }
+        if (od < 32 && od > 0.01) { vx += (ox / od) * step * 0.4; vy += (oy / od) * step * 0.6; }
       }
-      this.x += vx; this.y = Phaser.Math.Clamp(this.y + vy, 405, 540);
+      this.x += vx; this.y = Phaser.Math.Clamp(this.y + vy, 405 - BF, 540 - BF);
       if (this.team === 'ally') this.x = Math.min(this.x, 520);
       this.playAnim('walk');
     } else if (d <= reach) {
