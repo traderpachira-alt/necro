@@ -142,6 +142,9 @@ export function newRunMods() {
 
 // ---- permanent upgrades bought with Kara Ruh ----
 export const META = {
+  unlock_blood: { name: 'Kan Ayini Kartı', desc: 'Kan Ayini ödüllerde çıkmaya başlar', max: 1, cost: () => 40 },
+  unlock_frenzy: { name: 'Ölü Öfkesi Kartı', desc: 'Ölü Öfkesi ödüllerde çıkmaya başlar', max: 1, cost: () => 50 },
+  unlock_fusion: { name: 'Kemik Füzyonu Kartı', desc: 'Kemik Füzyonu ödüllerde çıkmaya başlar', max: 1, cost: () => 80 },
   body: { name: 'Kadim Beden', desc: 'Necromancer başlangıç canı +%10', max: 5, cost: (l) => 15 + l * 15 },
   purse: { name: 'Ruh Kesesi', desc: 'Başlangıç ruhu +10', max: 5, cost: (l) => 10 + l * 12 },
   bone: { name: 'Kutsanmış Kemik', desc: 'Tüm yaratıklar +%6 can', max: 5, cost: (l) => 15 + l * 15 },
@@ -149,3 +152,78 @@ export const META = {
   lore: { name: 'Mezar Bilgisi', desc: 'İlk elde +1 kart', max: 2, cost: (l) => 30 + l * 30 },
   luck: { name: 'Şans Ritüeli', desc: 'Nadir yaratık şansı artar', max: 3, cost: (l) => 25 + l * 25 },
 };
+
+// ---------------- deck ----------------
+let CARD_UID = 1;
+export function makeCard(kind, id, rarity = 0, level = 1) { return { uid: CARD_UID++, kind, id, rarity, level }; }
+
+export const STARTER_DECK = [
+  ['creature', 'guard'], ['creature', 'guard'], ['creature', 'butcher'], ['creature', 'butcher'],
+  ['creature', 'archer'], ['creature', 'archer'], ['creature', 'golem'], ['creature', 'wolf'], ['creature', 'banshee'],
+  ['ritual', 'harvest'], ['ritual', 'bonearmor'], ['ritual', 'whisper'],
+];
+export const BASE_RITUALS = ['harvest', 'bonearmor', 'whisper'];
+export const LOCKED_RITUALS = { blood: 'unlock_blood', frenzy: 'unlock_frenzy', fusion: 'unlock_fusion' };
+
+// level-dependent ritual numbers (level 2 = merged "II" version)
+export const RITUAL_VALUES = {
+  blood: [1, 2], whisper: [2, 4], bonearmor: [0.3, 0.55], harvest: [20, 45], frenzy: [0.25, 0.5], fusion: [1, 2],
+};
+export function ritualDesc(id, level = 1) {
+  const v = RITUAL_VALUES[id][level - 1];
+  switch (id) {
+    case 'blood': return v === 1 ? 'Elindeki bir yaratık kartı +1 nadirlik kazanır.' : 'Elindeki iki yaratık kartı +1 nadirlik kazanır.';
+    case 'whisper': return `Desteden ${v} kart çek.`;
+    case 'bonearmor': return `Bu dalga tüm yaratıklara canlarının %${Math.round(v * 100)}'i kadar kalkan.`;
+    case 'harvest': return `+${v} ruh kazan.`;
+    case 'frenzy': return `Bu dalga tüm yaratıklar +%${Math.round(v * 100)} hasar verir.`;
+    case 'fusion': return `${v} füzyon hakkı: farklı türden iki yaratığı (en az Sv.2) üst üste sürükle.`;
+  }
+  return RITUALS[id].desc;
+}
+
+export function rewardChoices(wave, unlocked, luck = 0) {
+  const pool = [...BASE_RITUALS, ...Object.keys(LOCKED_RITUALS).filter((k) => unlocked.includes(k))];
+  const out = [];
+  while (out.length < 3) {
+    const c = Math.random() < 0.7
+      ? makeCard('creature', BASE_CREATURES[(Math.random() * BASE_CREATURES.length) | 0], rollRarity(luck + Math.min(4, wave * 0.3)))
+      : makeCard('ritual', pool[(Math.random() * pool.length) | 0]);
+    if (!out.some((o) => o.kind === c.kind && o.id === c.id && o.rarity === c.rarity)) out.push(c);
+  }
+  return out;
+}
+
+// ---------------- items ----------------
+export const ITEMS = {
+  ring: { name: 'Kemik Yüzük', desc: '+%{v} hasar', atk: 0.2, icon: 'ring' },
+  amulet: { name: 'Mezar Muskası', desc: '+%{v} can', hp: 0.25, icon: 'amulet' },
+  fang: { name: 'Vampir Dişi', desc: 'Verdiği hasarın %{v}\'i kadar iyileşir', lifesteal: 0.15, icon: 'fang' },
+  cloak: { name: 'Kara Pelerin', desc: '%{v} ihtimalle saldırıdan kaçar', dodge: 0.15, icon: 'cloak' },
+  lantern: { name: 'Ruh Feneri', desc: '+%{v} saldırı hızı', haste: 0.2, icon: 'lantern' },
+  thorns: { name: 'Dikenli Zırh', desc: 'Yakın hasarın %{v}\'ini yansıtır', reflect: 0.2, icon: 'thorns' },
+  claw: { name: 'Kurt Pençesi', desc: '+%{v} kritik vuruş şansı', crit: 0.15, icon: 'claw' },
+  heart: { name: 'Taş Kalp', desc: 'Dalga başında %{v} kalkan', shield: 0.2, icon: 'heart' },
+  staff: { name: 'Kadim Asa', desc: 'Necromancer: +%{v} büyü hasarı', atk: 0.35, necro: true, icon: 'staff' },
+  necklace: { name: 'Ruh Kolyesi', desc: 'Necromancer: +%{v} can', hp: 0.3, necro: true, icon: 'necklace' },
+};
+const ITEM_STATS = ['atk', 'hp', 'lifesteal', 'dodge', 'haste', 'reflect', 'crit', 'shield'];
+export const ITEM_RARITY_MULT = [1, 1.35, 1.75, 2.3];
+export const BAG_SIZE = 8;
+let ITEM_UID = 1;
+export function makeItem(id, rarity = 0) { return { uid: ITEM_UID++, id, rarity }; }
+export function rollItem(luck = 0, boss = false) {
+  const keys = Object.keys(ITEMS);
+  return makeItem(keys[(Math.random() * keys.length) | 0], Math.min(3, rollRarity(luck + (boss ? 6 : 0)) + (boss ? 1 : 0)));
+}
+// effective stat values of an item (scaled by its rarity)
+export function itemStats(item) {
+  const I = ITEMS[item.id], m = ITEM_RARITY_MULT[item.rarity], out = {};
+  for (const k of ITEM_STATS) if (I[k]) out[k] = Math.round(I[k] * m * 100) / 100;
+  return out;
+}
+export function itemDesc(item) {
+  const st = itemStats(item), v = Object.values(st)[0];
+  return ITEMS[item.id].desc.replace('{v}', Math.round(v * 100));
+}
+export function itemValue(item) { return 6 + item.rarity * 8; }

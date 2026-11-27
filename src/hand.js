@@ -8,10 +8,11 @@ export { HAND_Y };
 
 const S = 0.5; // texture -> display scale
 
-function faceKey(scene, card) {
-  const key = card.kind === 'creature' ? `cf_${card.id}_${card.rarity}` : `cf_${card.kind}_${card.id}`;
+export function faceKey(scene, card) {
+  const lv = card.level || 1;
+  const key = card.kind === 'creature' ? `cf_${card.id}_${card.rarity}_${lv}` : `cf_${card.kind}_${card.id}_${lv}`;
   if (!scene.textures.exists(key)) {
-    const cv = card.kind === 'creature' ? drawCreatureCard(card.id, card.rarity, PORTRAITS[card.id]) : drawSpellCard(card.kind, card.id);
+    const cv = card.kind === 'creature' ? drawCreatureCard(card.id, card.rarity, PORTRAITS[card.id], lv) : drawSpellCard(card.kind, card.id, lv);
     scene.textures.addCanvas(key, cv).setFilter(Phaser.Textures.FilterMode.LINEAR);
   }
   return key;
@@ -76,6 +77,16 @@ export class CardView {
         sc.onCardRevealed(this);
       },
     });
+  }
+
+  // re-render the face after the card changed (merge, rarity upgrade)
+  refresh() {
+    if (!this.revealed) return;
+    const card = this.card;
+    this.face.setTexture(faceKey(this.scene, card));
+    this.glowImg.setTint(cardColor(card));
+    if (!this.sheen.visible && (card.kind !== 'creature' || card.rarity >= 1)) { this.sheen.setVisible(true).play('sheen'); }
+    if (card.kind === 'creature' && card.rarity === 3 && !this.rays) this.legendaryAura();
   }
 
   legendaryAura() {

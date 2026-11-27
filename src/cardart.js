@@ -1,5 +1,5 @@
 // Card face rendering (Canvas2D, rendered at 2x for crisp text).
-import { RARITIES, CREATURES, RITUALS, CURSES, ROLES } from './data.js';
+import { RARITIES, CREATURES, RITUALS, CURSES, ROLES, levelMult } from './data.js';
 
 export const CARD_W = 200, CARD_H = 290; // texture size; displayed at 0.5
 import { TITLE, BODY } from './fonts.js';
@@ -160,14 +160,22 @@ export function drawCreatureCard(id, rarity, portrait, level = 1) {
   title(c, C.name, 190, R.color, 20);
   c.font = `800 15px ${BODY}`; c.textAlign = 'center'; c.fillStyle = R.color;
   c.fillText(`${R.name} • ${ROLES[C.role].name}`, CARD_W / 2, 217);
-  const hp = Math.round(C.hp * R.mult), atk = Math.round(C.atk * R.mult);
+  // level plaque
+  c.save();
+  const lw = 64, lx = CARD_W / 2 - lw / 2, ly = 24;
+  rr(c, lx, ly, lw, 30, 8); c.fillStyle = '#05030a'; c.fill();
+  rr(c, lx + 2, ly + 2, lw - 4, 26, 7); c.fillStyle = level > 1 ? '#5a3a0a' : '#2a2036'; c.fill();
+  c.font = `900 16px ${TITLE}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = level > 1 ? '#ffd36a' : '#d8d0e8';
+  c.fillText(`Sv.${level}`, CARD_W / 2, ly + 16);
+  c.restore();
+  const hp = Math.round(C.hp * R.mult * levelMult(level)), atk = Math.round(C.atk * R.mult * levelMult(level));
   statBox(c, 18, 232, 'hp', hp, '#e2445a');
   statBox(c, CARD_W - 96, 232, 'atk', atk, '#f0b44a');
   cornerSkulls(c, R.color);
   return cv;
 }
 
-export function drawSpellCard(kind, id) {
+export function drawSpellCard(kind, id, level = 1) {
   const cv = newCanvas(), c = cv.getContext('2d');
   const isCurse = kind === 'curse';
   const D = isCurse ? CURSES[id] : RITUALS[id];
@@ -186,11 +194,11 @@ export function drawSpellCard(kind, id) {
     for (const [dx, len] of [[20, 18], [46, 30], [100, 14], [130, 24]]) { c.fillRect(win.x + dx, win.y, 4, len); c.beginPath(); c.arc(win.x + dx + 2, win.y + len, 3.5, 0, Math.PI * 2); c.fill(); }
   }
   c.restore();
-  title(c, D.name, 190, col, 20);
+  title(c, D.name + (level > 1 ? ' II' : ''), 190, level > 1 ? '#d8a032' : col, 20);
   c.save();
   c.font = `900 22px ${TITLE}`; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.shadowColor = col; c.shadowBlur = 12; c.fillStyle = isCurse ? '#ff9a90' : '#d8c4ff';
-  c.fillText(isCurse ? 'LANET' : 'RİTÜEL', CARD_W / 2, 238);
+  c.fillText(isCurse ? 'LANET' : level > 1 ? 'RİTÜEL II' : 'RİTÜEL', CARD_W / 2, 238);
   c.restore();
   c.fillStyle = col;
   for (const dx of [-52, 52]) { c.beginPath(); c.moveTo(CARD_W / 2 + dx, 232); c.lineTo(CARD_W / 2 + dx + 6, 238); c.lineTo(CARD_W / 2 + dx, 244); c.lineTo(CARD_W / 2 + dx - 6, 238); c.fill(); }
@@ -273,5 +281,26 @@ export function drawBoonFrame(icon, colHex) {
   else glyph(c, { staff: 'eye', heart: 'drop', soul: 'soul', card: 'hand', coin: 'sun', ward: 'shield', skull: 'ghost' }[icon] || 'soul', cx, cy, '#ffffff');
   // divider under icon
   c.fillStyle = col; c.fillRect(30, 186, BOON_W - 60, 2);
+  return cv;
+}
+
+// 40x40 item icon (canvas vector art, tinted by rarity at runtime through the frame colour)
+export function drawItemIcon(id) {
+  const cv = newCanvas(80, 80), c = cv.getContext('2d');
+  c.translate(40, 40); c.lineCap = 'round'; c.lineJoin = 'round';
+  const bone = '#e8dfc6', dark = '#05030a';
+  c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 4;
+  switch (id) {
+    case 'ring': c.lineWidth = 9; c.strokeStyle = '#d8a032'; c.beginPath(); c.arc(0, 6, 18, 0, Math.PI * 2); c.stroke(); c.fillStyle = bone; c.beginPath(); c.arc(0, -14, 10, 0, Math.PI * 2); c.fill(); c.fillStyle = dark; c.fillRect(-5, -16, 3, 3); c.fillRect(2, -16, 3, 3); break;
+    case 'amulet': c.strokeStyle = '#a8a0b8'; c.lineWidth = 3; c.beginPath(); c.moveTo(-20, -28); c.lineTo(0, -6); c.lineTo(20, -28); c.stroke(); c.fillStyle = '#7d5bd8'; c.beginPath(); c.moveTo(0, -10); c.lineTo(16, 8); c.lineTo(0, 28); c.lineTo(-16, 8); c.closePath(); c.fill(); c.fillStyle = '#c8b0ff'; c.beginPath(); c.moveTo(0, -4); c.lineTo(7, 8); c.lineTo(0, 12); c.closePath(); c.fill(); break;
+    case 'fang': c.fillStyle = bone; for (const sx of [-1, 1]) { c.beginPath(); c.moveTo(sx * 18, -24); c.quadraticCurveTo(sx * 4, -4, sx * 6, 28); c.quadraticCurveTo(sx * 20, 0, sx * 26, -20); c.fill(); } c.fillStyle = '#c02838'; c.beginPath(); c.arc(6, 26, 4, 0, Math.PI * 2); c.fill(); break;
+    case 'cloak': c.fillStyle = '#24103e'; c.beginPath(); c.moveTo(0, -30); c.quadraticCurveTo(26, -10, 26, 30); c.lineTo(-26, 30); c.quadraticCurveTo(-26, -10, 0, -30); c.fill(); c.fillStyle = '#05030a'; c.beginPath(); c.ellipse(0, -10, 9, 12, 0, 0, Math.PI * 2); c.fill(); c.fillStyle = '#8dff7a'; c.fillRect(-5, -12, 3, 3); c.fillRect(2, -12, 3, 3); break;
+    case 'lantern': c.fillStyle = '#4a3a2a'; c.fillRect(-14, -24, 28, 6); c.fillRect(-14, 20, 28, 6); c.fillStyle = 'rgba(125,255,106,0.85)'; c.shadowColor = '#7dff6a'; c.shadowBlur = 18; c.fillRect(-11, -18, 22, 38); c.shadowBlur = 0; c.strokeStyle = '#4a3a2a'; c.lineWidth = 3; c.strokeRect(-11, -18, 22, 38); c.beginPath(); c.arc(0, -30, 6, Math.PI, 0); c.stroke(); break;
+    case 'thorns': c.fillStyle = '#6a7080'; c.beginPath(); c.moveTo(-22, -22); c.lineTo(22, -22); c.lineTo(22, 6); c.lineTo(0, 28); c.lineTo(-22, 6); c.closePath(); c.fill(); c.fillStyle = bone; for (const [x, y, a] of [[-22, -12, Math.PI], [22, -12, 0], [-14, 14, 2.4], [14, 14, 0.7], [0, -22, -Math.PI / 2]]) { c.save(); c.translate(x, y); c.rotate(a); c.beginPath(); c.moveTo(0, -4); c.lineTo(12, 0); c.lineTo(0, 4); c.fill(); c.restore(); } break;
+    case 'claw': c.strokeStyle = bone; c.lineWidth = 6; for (const dx of [-14, 0, 14]) { c.beginPath(); c.moveTo(dx - 6, 24); c.quadraticCurveTo(dx + 8, 4, dx - 2, -26); c.stroke(); } break;
+    case 'heart': c.fillStyle = '#7a6a7a'; c.beginPath(); c.moveTo(0, 26); c.bezierCurveTo(-34, 0, -20, -32, 0, -14); c.bezierCurveTo(20, -32, 34, 0, 0, 26); c.fill(); c.strokeStyle = '#3a2a3a'; c.lineWidth = 2; c.beginPath(); c.moveTo(-4, -10); c.lineTo(4, 2); c.lineTo(-2, 14); c.stroke(); break;
+    case 'staff': c.strokeStyle = '#6a5470'; c.lineWidth = 6; c.beginPath(); c.moveTo(-18, 30); c.lineTo(14, -18); c.stroke(); c.fillStyle = bone; c.beginPath(); c.arc(16, -20, 10, 0, Math.PI * 2); c.fill(); c.fillStyle = '#7dff6a'; c.shadowColor = '#7dff6a'; c.shadowBlur = 16; c.beginPath(); c.arc(18, -32, 6, 0, Math.PI * 2); c.fill(); break;
+    case 'necklace': c.strokeStyle = '#d8a032'; c.lineWidth = 3; c.beginPath(); c.arc(0, -8, 22, 0.2, Math.PI - 0.2); c.stroke(); c.fillStyle = '#5cffc8'; c.shadowColor = '#5cffc8'; c.shadowBlur = 18; c.beginPath(); c.arc(0, 20, 10, 0, Math.PI * 2); c.fill(); break;
+  }
   return cv;
 }

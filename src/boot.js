@@ -3,6 +3,8 @@ import { buildFrames, SPRITE_KEYS } from './art.js';
 import { registerSheet, lumNormal } from './pixel.js';
 import { paintBackground, paintPanel } from './background.js';
 import { H, PANEL_Y } from './layout.js';
+import { drawItemIcon } from './cardart.js';
+import { ITEMS } from './data.js';
 import { drawCardBack, drawCardGlow, drawSheenFrames, CARD_W, CARD_H } from './cardart.js';
 
 export const PORTRAITS = {};
@@ -80,6 +82,7 @@ export class BootScene extends Phaser.Scene {
     this.anims.create({ key: 'sheen', frames: Array.from({ length: 16 }, (_, k) => ({ key: 'card_sheen', frame: k })), frameRate: 22, repeat: -1, repeatDelay: 1800 });
     for (const k of ['rays', 'big_soft', 'soft', 'fog', 'ring']) T.get(k).setFilter(Phaser.Textures.FilterMode.LINEAR);
 
+    for (const id of Object.keys(ITEMS)) T.addCanvas('item_' + id, drawItemIcon(id)).setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.scene.start('Menu');
   }
 }

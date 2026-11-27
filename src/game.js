@@ -3,13 +3,16 @@ import { Unit } from './unit.js';
 import { Hand, cardColor } from './hand.js';
 import {
   CREATURES, ENEMIES, NECRO, RITUALS, CURSES, RARITIES, ROLES, CONFIG, BOONS, MAX_LEVEL, FUSION_MIN_LEVEL,
-  randomCard, waveComposition, levelMult, recipeFor, newRunMods,
+  waveComposition, levelMult, recipeFor, newRunMods,
+  makeCard, STARTER_DECK, RITUAL_VALUES, ritualDesc, LOCKED_RITUALS, itemStats, ITEMS,
 } from './data.js';
+import { installDeckUI } from './deckui.js';
 import { sfx, unlockAudio, toggleMute, isMuted } from './audio.js';
 import { TITLE, BODY, ZOOM } from './fonts.js';
 import { W, H, BF, PANEL_Y, INFO_Y, INFO_H, BTN_Y, DECK } from './layout.js';
 import { save, metaLevel, recordRun, discover } from './save.js';
 import { drawBoonFrame, BOON_W, BOON_H } from './cardart.js';
+import { CARD_SCALE } from './layout.js';
 
 const SLOT_COLS = [142, 226, 310];
 const SLOT_ROWS = [428 - BF, 516 - BF];
@@ -73,6 +76,11 @@ export class GameScene extends Phaser.Scene {
     this.buff = { shield: 0, atk: 1 }; this.enemyMult = 1; this.pendingRarity = 0; this.drawsThisPrep = 0;
     this.fusionCharges = 0;
     this.speedMul = 1;
+    this.deck = Phaser.Utils.Array.Shuffle(STARTER_DECK.map(([k, id]) => makeCard(k, id)));
+    this.grave = []; this.used = []; this.bag = [];
+    this.unlockedRituals = {};
+    for (const [rid, mk] of Object.entries(LOCKED_RITUALS)) if (metaLevel(mk) > 0) this.unlockedRituals[rid] = true;
+    this.pileLayer = null; this.bagLayer = null; this.selUnit = null;
     this.tweens.timeScale = 1; this.time.timeScale = 1; this.anims.globalTimeScale = 1;
     this._slots = null; this.quitLayer = null; this.dropZone = null; this.dragLabel = null; this.hlUnit = null;
 
@@ -82,6 +90,7 @@ export class GameScene extends Phaser.Scene {
     this.buildUI();
     this.hand = new Hand(this);
     this.bindInput();
+    this.updatePiles();
 
     this.necro = new Unit(this, { key: 'necro', team: 'ally', stats: NECRO, isNecro: true, x: NECRO_POS.x, y: NECRO_POS.y });
     this.necro.sprite.setInteractive({ useHandCursor: true });
@@ -93,11 +102,13 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- stats
   allyMult(u) {
-    if (u.isNecro) return { hp: (1 + 0.1 * this.meta.body) * (1 + this.mods.necroHp), atk: 1 + this.mods.necroAtk, heal: 1 };
+    const it = u.item ? itemStats(u.item) : {};
+    const ih = 1 + (it.hp || 0), ia = 1 + (it.atk || 0);
+    if (u.isNecro) return { hp: (1 + 0.1 * this.meta.body) * (1 + this.mods.necroHp) * ih, atk: (1 + this.mods.necroAtk) * ia, heal: 1 };
     const role = u.base.role, rm = RARITIES[u.rarity].mult * levelMult(u.level);
     return {
-      hp: rm * (1 + this.mods.roleHp[role] + 0.06 * this.meta.bone),
-      atk: rm * (1 + this.mods.roleAtk[role] + 0.06 * this.meta.rage),
+      hp: rm * (1 + this.mods.roleHp[role] + 0.06 * this.meta.bone) * ih,
+      atk: rm * (1 + this.mods.roleAtk[role] + 0.06 * this.meta.rage) * ia,
       heal: rm * (1 + this.mods.heal),
     };
   }
@@ -168,17 +179,17 @@ export class GameScene extends Phaser.Scene {
     this.infoG = this.add.graphics().setDepth(1001);
     this.infoG.fillStyle(0x05030a, 0.7).fillRoundedRect(10, INFO_Y, W - 20, INFO_H, 10);
     this.infoG.lineStyle(2, 0x3a2a50, 1).strokeRoundedRect(10, INFO_Y, W - 20, INFO_H, 10);
-    this.infoTitle = txt(this, 22, INFO_Y + 6, '', 21, '#fff2d0', T).setDepth(1002);
-    this.infoBody = txt(this, 22, INFO_Y + 35, '', 17, '#ddd0f4', { wordWrap: { width: W - 44 }, lineSpacing: -2 }).setDepth(1002);
+    this.infoTitle = txt(this, 22, INFO_Y + 8, '', 21, '#fff2d0', { ...T, fixedWidth: W - 190 }).setDepth(1002);
+    this.infoBody = txt(this, 22, INFO_Y + 42, '', 17, '#ddd0f4', { wordWrap: { width: W - 44 }, lineSpacing: -2 }).setDepth(1002);
 
-    for (let i = 3; i >= 0; i--) this.add.image(DECK.x - 2 + i * 2, DECK.y - i * 2, 'card_back').setScale(0.3).setDepth(1001).setAlpha(1 - i * 0.15);
-    txt(this, DECK.x, DECK.y + 44, 'Deste', 13, '#b89be8').setOrigin(0.5).setDepth(1002);
-
-    this.btnDraw = new Button(this, 212, BTN_Y, 172, 62, 'KART ÇEK', 0x5a3a9a, () => this.buyCard());
-    this.btnStart = new Button(this, 408, BTN_Y, 200, 62, 'SAVAŞA BAŞLA', 0x2f8a4a, () => this.startBattle());
-    this.btnA = new Button(this, 212, BTN_Y, 172, 62, '', 0x5a3a9a, () => this.cardActionA()).show(false);
-    this.btnB = new Button(this, 408, BTN_Y, 200, 62, '', 0x2f8a4a, () => this.cardActionB()).show(false);
-    this.btnSpeed = new Button(this, 408, BTN_Y, 200, 62, 'HIZ x1', 0x6a4a2a, () => this.toggleSpeed()).show(false);
+    this.buildPiles();
+    this.buildBagButton();
+    const bx1 = 178, bx2 = 362, bw1 = 162, bw2 = 182;
+    this.btnDraw = new Button(this, bx1, BTN_Y, bw1, 62, 'KART ÇEK', 0x5a3a9a, () => this.buyCard());
+    this.btnStart = new Button(this, bx2, BTN_Y, bw2, 62, 'SAVAŞA BAŞLA', 0x2f8a4a, () => this.startBattle());
+    this.btnA = new Button(this, bx1, BTN_Y, bw1, 62, '', 0x5a3a9a, () => this.cardActionA()).show(false);
+    this.btnB = new Button(this, bx2, BTN_Y, bw2, 62, '', 0x2f8a4a, () => this.cardActionB()).show(false);
+    this.btnSpeed = new Button(this, bx2, BTN_Y, bw2, 62, 'HIZ x1', 0x6a4a2a, () => this.toggleSpeed()).show(false);
 
     this.unitCountText = txt(this, W - 14, PANEL_Y - 30, '', 17, '#ddd0f4').setOrigin(1, 0).setDepth(1001);
     this.fusionText = txt(this, 14, PANEL_Y - 30, '', 17, '#e8a8ff').setDepth(1001);
@@ -193,9 +204,10 @@ export class GameScene extends Phaser.Scene {
     this.soulText.setText(String(this.souls));
     this.unitCountText.setText(`Yaratık ${this.allyCreatures().length}/${CONFIG.maxUnits}`);
     this.fusionText.setText(this.fusionCharges > 0 ? `Füzyon hakkı: ${this.fusionCharges}` : '');
+    this.updatePiles();
     if (this.state === 'prep' && !this.hand.selected) {
       const cost = this.drawCost();
-      this.btnDraw.set('KART ÇEK', `${cost} ruh`).setEnabled(this.souls >= cost && this.hand.size < CONFIG.maxHand);
+      this.btnDraw.set('KART ÇEK', `${cost} ruh`).setEnabled(this.souls >= cost && this.hand.size < CONFIG.maxHand && this.deck.length + this.grave.length > 0);
     }
   }
 
@@ -249,6 +261,7 @@ export class GameScene extends Phaser.Scene {
       const over = dy < PANEL_Y;
       obj.setScale(over ? 0.7 : v.tscale);
       this.dropHint(over, v, dx, dy);
+      this.handHint(over ? null : this.handMergeTarget(v, dx, dy));
     });
     this.input.on('dragend', (p, obj) => {
       const u = unitOf(obj);
@@ -256,6 +269,9 @@ export class GameScene extends Phaser.Scene {
       const v = viewOf(obj); if (!v || v.noDrag) return;
       v.dragging = false; v.wasDragged = true;
       this.dropHint(false);
+      const ht = obj.y >= PANEL_Y ? this.handMergeTarget(v, obj.x, obj.y) : null;
+      this.handHint(null);
+      if (ht) { this.mergeHandCards(v, ht); return; }
       if (obj.y < PANEL_Y) {
         const target = this.cardMergeTarget(v.card, obj.x, obj.y + 50);
         if (target) this.mergeCardInto(v, target); else this.playCard(v);
@@ -265,7 +281,7 @@ export class GameScene extends Phaser.Scene {
       const u = unitOf(obj);
       if (u) {
         if (u.wasDragged) { u.wasDragged = false; return; }
-        if (this.state === 'prep' && u.team === 'ally' && !u.isNecro && !u.hidden) this.selectUnit(u); else this.showUnitInfo(u);
+        if (this.state === 'prep' && u.team === 'ally' && !u.hidden && (!u.isNecro || u.item)) this.selectUnit(u); else this.showUnitInfo(u);
         return;
       }
       const v = viewOf(obj); if (!v) return;
@@ -387,9 +403,11 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({
       targets: [a.sprite, a.glow], x: b.x, y: b.y - 20, scaleX: 0.5, scaleY: 0.5, alpha: 0.3, duration: 260, ease: 'Cubic.easeIn',
       onComplete: () => {
+        this.returnItem(a.item); a.item = null;
         a.vanish();
         b.setLevel(b.level + 1, Math.max(a.rarity, b.rarity));
         b.hp = b.maxHp;
+        this.syncCard(b);
         this.levelUpFx(b, `SEVİYE ${b.level}!`);
         this.showUnitInfo(b);
         this.updateHUD();
@@ -399,8 +417,55 @@ export class GameScene extends Phaser.Scene {
   cardMergeTarget(card, x, y) {
     if (card.kind !== 'creature') return null;
     const t = this.unitAt(x, y);
-    return t && t.key === card.id && t.level === 1 ? t : null;
+    return t && t.key === card.id && t.level === (card.level || 1) && t.level < MAX_LEVEL ? t : null;
   }
+  canMergeCards(a, b) {
+    if (a.kind !== b.kind || a.id !== b.id) return false;
+    if (a.kind === 'creature') return (a.level || 1) === (b.level || 1) && (a.level || 1) < MAX_LEVEL;
+    if (a.kind === 'ritual') return (a.level || 1) === 1 && (b.level || 1) === 1;
+    return false;
+  }
+  handMergeTarget(v, x, y) {
+    let best = null, bd = 60 * CARD_SCALE;
+    for (const o of this.hand.cards) {
+      if (o === v || !o.revealed || o.busy || !o.dealt) continue;
+      const d = Math.hypot(o.c.x - x, o.c.y - y);
+      if (d < bd && this.canMergeCards(v.card, o.card)) { bd = d; best = o; }
+    }
+    return best;
+  }
+  handHint(t) {
+    if (this.hhCard && this.hhCard !== t && this.hhCard.c.active) { this.hhCard.c.y = this.hhCard.ty; }
+    this.hhCard = t;
+    if (!this.hhLabel) this.hhLabel = txt(this, 0, 0, '', 18, '#ffd36a', T).setOrigin(0.5).setDepth(1360);
+    if (!t) { this.hhLabel.setText(''); return; }
+    t.c.y = t.ty - 24;
+    const lv = (t.card.level || 1) + 1;
+    this.hhLabel.setText(t.card.kind === 'ritual' ? 'Birleştir → II' : `Birleştir → Sv.${lv}`).setPosition(t.c.x, t.ty - 120 * CARD_SCALE);
+  }
+  mergeHandCards(v, t) {
+    this.hand.remove(v); this.select(null);
+    v.busy = true; t.busy = true;
+    this.tweens.add({
+      targets: v.c, x: t.c.x, y: t.c.y, scale: t.c.scaleX * 0.9, alpha: 0, duration: 260, ease: 'Cubic.easeIn',
+      onComplete: () => {
+        v.destroy();
+        t.card.level = (t.card.level || 1) + 1;
+        t.card.rarity = Math.max(t.card.rarity || 0, v.card.rarity || 0);
+        t.refresh();
+        t.busy = false;
+        sfx.epic();
+        this.fxUI.setParticleTint(0xffd36a); this.fxUI.explode(36, t.c.x, t.c.y);
+        this.tweens.add({ targets: t.c, scaleX: t.tscale * 1.15, scaleY: t.tscale * 1.15, duration: 160, yoyo: true });
+        this.floatText(t.c.x, t.c.y - 110 * CARD_SCALE, t.card.kind === 'ritual' ? `${RITUALS[t.card.id].name} II` : `Sv.${t.card.level}!`, '#ffd36a', 20);
+        this.hand.layout();
+        this.select(t);
+      },
+    });
+    this.hand.layout();
+  }
+  // keep the creature's card in sync with the unit (level/rarity)
+  syncCard(u) { if (!u.card) u.card = makeCard('creature', u.key, u.rarity, u.level); u.card.level = u.level; u.card.rarity = u.rarity; }
   mergeCardInto(v, t) {
     this.hand.remove(v); this.select(null);
     v.busy = true;
@@ -411,6 +476,7 @@ export class GameScene extends Phaser.Scene {
         if (t.dead) return;
         t.setLevel(t.level + 1, Math.max(v.card.rarity, t.rarity));
         t.hp = t.maxHp;
+        this.syncCard(t);
         this.levelUpFx(t, `SEVİYE ${t.level}!`);
         this.showUnitInfo(t);
         this.updateHUD();
@@ -431,8 +497,9 @@ export class GameScene extends Phaser.Scene {
     const pillar = this.add.image(cx, cy, 'beam').setOrigin(0.5, 1).setScale(4, 0).setTint(0xe8a8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(cy + 1);
     this.tweens.add({ targets: pillar, scaleY: 3.5, duration: 500, yoyo: true, hold: 500, onComplete: () => pillar.destroy() });
     this.time.delayedCall(680, () => {
+      this.returnItem(a.item); this.returnItem(b.item); a.item = b.item = null;
       a.vanish(); b.vanish(); slot.unit = null;
-      const u = this.createAlly(hybrid, rarity, slot, level);
+      const u = this.createAlly(hybrid, rarity, slot, level, makeCard('creature', hybrid, rarity, level));
       this.cameras.main.flash(300, 230, 170, 255);
       this.levelUpFx(u, CREATURES[hybrid].name.toUpperCase(), 0xe8a8ff);
       if (discover(hybrid)) {
@@ -449,7 +516,7 @@ export class GameScene extends Phaser.Scene {
 
   showUnitInfo(u) {
     if (u.isNecro) {
-      this.setInfo('Necromancer', `Can ${Math.round(u.hp)}/${u.maxHp}  •  Hasar ${Math.round(u.atk)}  —  Ölüm büyüsüyle uzaktan saldırır. Ölürse oyun biter.`, '#c8b0ff');
+      this.setInfo('Necromancer', `Can ${Math.round(u.hp)}/${u.maxHp}  •  Hasar ${Math.round(u.atk)}${this.itemLine(u)}  —  Ölüm büyüsüyle uzaktan saldırır. Ölürse oyun biter.`, '#c8b0ff');
       return;
     }
     if (u.team !== 'ally') {
@@ -461,7 +528,7 @@ export class GameScene extends Phaser.Scene {
     if (this.fusionCharges > 0 && !u.base.hybrid) hint += ' Füzyon hakkın var: farklı türe sürükle.';
     if (this.state === 'prep') hint += ' İstemiyorsan toprağa gömebilirsin.';
     this.setInfo(`${u.name}  •  Sv.${u.level} ${R.name}`,
-      `Can ${Math.round(u.hp)}/${u.maxHp}  Hasar ${Math.round(u.atk)}${u.heal ? `  İyileştirme ${Math.round(u.heal)}` : ''} — ${u.base.desc} ${this.state === 'prep' ? hint : ''}`, R.color);
+      `Can ${Math.round(u.hp)}/${u.maxHp}  Hasar ${Math.round(u.atk)}${u.heal ? `  İyileştirme ${Math.round(u.heal)}` : ''}${this.itemLine(u)} — ${u.base.desc} ${this.state === 'prep' ? hint : ''}`, R.color);
   }
 
   // ---------------------------------------------------------------- card selection & actions
@@ -473,11 +540,13 @@ export class GameScene extends Phaser.Scene {
     this.highlightUnit(u, 0xb8ffc8);
     this.showUnitInfo(u);
     this.btnDraw.show(false); this.btnStart.show(false);
-    this.btnA.show(true).set('TOPRAĞA GÖM', `+${this.buryValue(u)} ruh`).setColor(0x8a2a3a).setEnabled(true);
-    this.btnB.show(true).set('KAPAT').setColor(0x4a4258).setEnabled(true);
+    this.btnA.show(!u.isNecro).set('TOPRAĞA GÖM', `+${this.buryValue(u)} ruh`).setColor(0x8a2a3a).setEnabled(true);
+    if (u.item) this.btnB.show(true).set('EŞYAYI ÇIKAR', 'çantaya koy').setColor(0x6a4a2a).setEnabled(true);
+    else this.btnB.show(true).set('KAPAT').setColor(0x4a4258).setEnabled(true);
   }
 
   buryUnit(u) {
+    this.returnItem(u.item); u.item = null;
     const val = this.buryValue(u);
     if (u.slot) { u.slot.unit = null; u.slot = null; }
     u.hidden = true; u.noSync = true; u.bar.clear();
@@ -515,21 +584,22 @@ export class GameScene extends Phaser.Scene {
     const reroll = this.rerollCost();
     this.btnA.set('YENİDEN ÇEK', `${reroll} ruh`).setColor(0x5a3a9a).setEnabled(this.souls >= reroll);
     if (card.kind === 'creature') {
-      const C = CREATURES[card.id], R = RARITIES[card.rarity], st = this.previewStats(card.id, card.rarity);
-      this.setInfo(`${C.name}  •  ${R.name} ${ROLES[C.role].name}`,
+      const C = CREATURES[card.id], R = RARITIES[card.rarity], st = this.previewStats(card.id, card.rarity, card.level || 1);
+      this.setInfo(`${C.name}  •  Sv.${card.level || 1} ${R.name}`,
         `Can ${st.hp}  Hasar ${st.atk}${st.heal ? `  İyileştirme ${st.heal}` : ''}  —  ${C.desc}`, R.color);
       const full = this.allyCreatures().length >= CONFIG.maxUnits;
-      const mergeT = this.allyCreatures().find((u) => u.key === card.id && u.level === 1);
+      const mergeT = this.allyCreatures().find((u) => u.key === card.id && u.level === (card.level || 1) && u.level < MAX_LEVEL);
       if (!full) this.btnB.set('OYNA').setColor(0x2f8a4a).setEnabled(true);
-      else if (mergeT) this.btnB.set('BİRLEŞTİR', 'Sv.1 → Sv.2').setColor(0xb8862a).setEnabled(true);
+      else if (mergeT) this.btnB.set('BİRLEŞTİR', `Sv.${mergeT.level} → Sv.${mergeT.level + 1}`).setColor(0xb8862a).setEnabled(true);
       else this.btnB.set('FEDA ET', `+${this.sacrificeValue(card)} ruh`).setColor(0x8a2a3a).setEnabled(true);
     } else {
       const D = RITUALS[card.id];
-      this.setInfo(`✦ ${D.name}  (Ritüel)`, D.desc, '#c8b0ff');
+      this.setInfo(`✦ ${D.name}${(card.level || 1) > 1 ? ' II' : ''}  (Ritüel)`, this.ritualText(card) + ((card.level || 1) === 1 ? ' Aynı ritüelle elde birleştirirsen güçlenir.' : ''), '#c8b0ff');
       this.btnB.set('OYNA').setColor(0x2f8a4a).setEnabled(true);
     }
   }
-  sacrificeValue(card) { return 5 + card.rarity * 6; }
+  sacrificeValue(card) { return 5 + card.rarity * 6 + ((card.level || 1) - 1) * 5; }
+  ritualText(card) { return ritualDesc(card.id, card.level || 1); }
   rerollCost() { return Math.max(2, CONFIG.rerollCost - this.mods.discount); }
   drawCost() { return Math.max(3, CONFIG.drawCost + CONFIG.drawCostStep * this.drawsThisPrep - this.mods.discount); }
 
@@ -545,18 +615,19 @@ export class GameScene extends Phaser.Scene {
       const cost = this.rerollCost();
       if (this.souls < cost) return;
       this.souls -= cost;
+      this.used.push(v.card);
       this.burnCard(v, 0x7dff6a);
       this.time.delayedCall(250, () => this.dealCards(1));
     }
     this.select(null);
   }
   cardActionB() {
-    if (this.selUnit) { this.select(null); return; }
+    if (this.selUnit) { const u = this.selUnit; if (u.item) { this.unequipItem(u); this.selectUnit(u); return; } this.select(null); return; }
     const v = this.hand.selected; if (!v) return;
     const card = v.card;
     if (card.kind === 'curse') { this.select(null); return; }
     if (card.kind === 'creature' && this.allyCreatures().length >= CONFIG.maxUnits) {
-      const t = this.allyCreatures().find((u) => u.key === card.id && u.level === 1);
+      const t = this.allyCreatures().find((u) => u.key === card.id && u.level === (card.level || 1) && u.level < MAX_LEVEL);
       if (t) { this.mergeCardInto(v, t); return; }
       const val = this.sacrificeValue(card);
       this.burnCard(v, 0x7dff6a);
@@ -580,14 +651,27 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- cards
   newCard() {
-    const card = randomCard(this.wave, this.cardLuck());
+    if (!this.deck.length) {
+      if (!this.grave.length) return null;
+      this.deck = Phaser.Utils.Array.Shuffle(this.grave); this.grave = [];
+      this.floatText(46, BTN_Y - 90, 'Mezarlık karıştırıldı', '#c8b0ff', 14);
+      sfx.flip();
+    }
+    const card = this.deck.pop();
     if (card.kind === 'creature' && this.pendingRarity > 0) { card.rarity = Math.min(3, card.rarity + this.pendingRarity); this.pendingRarity = 0; }
     return card;
   }
 
   dealCards(n) {
     n = Math.min(n, CONFIG.maxHand - this.hand.size);
-    for (let i = 0; i < n; i++) this.hand.add(this.newCard(), i * 140);
+    let dealt = 0;
+    for (let i = 0; i < n; i++) {
+      const c = this.newCard();
+      if (!c) { if (!dealt) this.floatText(270, 420, 'Destede kart kalmadı', '#ff8a80', 16); break; }
+      this.hand.add(c, i * 140); dealt++;
+    }
+    n = dealt;
+    this.updatePiles();
     if (n > 0) this.time.delayedCall(n * 140 + 300, () => { this.updateHUD(); this.prepInfo(); });
     return n;
   }
@@ -650,28 +734,31 @@ export class GameScene extends Phaser.Scene {
     v.busy = true;
     this.tweens.add({ targets: v.c, x: W / 2, y: 230, scale: 1.35, angle: 0, duration: 320, ease: 'Cubic.easeOut' });
     this.tweens.add({ targets: v.c, alpha: 0, scale: 1.8, delay: 520, duration: 300, onComplete: () => v.destroy() });
-    this.time.delayedCall(420, () => { this.fxUI.setParticleTint(0x9b6bff); this.fxUI.explode(40, W / 2, 230); this.applyRitual(card.id); });
+    this.time.delayedCall(420, () => { this.fxUI.setParticleTint(0x9b6bff); this.fxUI.explode(40, W / 2, 230); this.used.push(card); this.applyRitual(card.id, card.level || 1); this.updatePiles(); });
     this.hand.layout();
   }
 
-  applyRitual(id) {
+  applyRitual(id, level = 1) {
     sfx.epic();
-    const D = RITUALS[id];
-    this.floatText(W / 2, 160, D.name, '#c8b0ff', 24);
+    const D = RITUALS[id], val = RITUAL_VALUES[id][level - 1];
+    this.floatText(W / 2, 160, D.name + (level > 1 ? ' II' : ''), '#c8b0ff', 24);
     if (id === 'blood') {
-      const target = this.hand.cards.find((c) => c.card.kind === 'creature' && c.card.rarity < 3);
-      if (target) {
-        target.card.rarity++;
+      let left = val;
+      for (const target of this.hand.cards) {
+        if (left <= 0) break;
+        if (target.card.kind !== 'creature' || target.card.rarity >= 3) continue;
+        target.card.rarity++; left--;
         if (target.revealed) { target.revealed = false; target.sheen.setVisible(false); target.reveal(); }
         else { this.fxUI.setParticleTint(0xff3040); this.fxUI.explode(20, target.c.x, target.c.y); }
-      } else this.pendingRarity++;
+      }
+      this.pendingRarity += left;
     }
-    if (id === 'whisper') this.dealCards(2);
-    if (id === 'bonearmor') { this.buff.shield = 0.3; this.floatText(W / 2, 190, 'Bu dalga: kemik kalkanı', '#9fdcff', 16); }
-    if (id === 'harvest') this.addSouls(20, W / 2, 230);
-    if (id === 'frenzy') { this.buff.atk = 1.25; this.floatText(W / 2, 190, 'Bu dalga: +%25 hasar', '#ff9a6a', 16); }
+    if (id === 'whisper') this.dealCards(val);
+    if (id === 'bonearmor') { this.buff.shield = Math.max(this.buff.shield, val); this.floatText(W / 2, 190, 'Bu dalga: kemik kalkanı', '#9fdcff', 16); }
+    if (id === 'harvest') this.addSouls(val, W / 2, 230);
+    if (id === 'frenzy') { this.buff.atk = Math.max(this.buff.atk, 1 + val); this.floatText(W / 2, 190, `Bu dalga: +%${Math.round(val * 100)} hasar`, '#ff9a6a', 16); }
     if (id === 'fusion') {
-      this.fusionCharges++;
+      this.fusionCharges += val;
       this.floatText(W / 2, 190, 'Füzyon hakkı kazandın', '#e8a8ff', 18);
       this.time.delayedCall(600, () => this.setInfo('Kemik Füzyonu', `Farklı türden iki yaratığı (ikisi de en az Sv.${FUSION_MIN_LEVEL}) savaş alanında üst üste sürükle. Keşfettiğin tarifler Grimuar'a yazılır.`, '#e8a8ff'));
     }
@@ -697,8 +784,8 @@ export class GameScene extends Phaser.Scene {
     return free[0];
   }
 
-  createAlly(key, rarity, slot, level = 1) {
-    const u = new Unit(this, { key, team: 'ally', stats: CREATURES[key], rarity, level, x: slot.x, y: slot.y });
+  createAlly(key, rarity, slot, level = 1, card = null) {
+    const u = new Unit(this, { key, team: 'ally', stats: CREATURES[key], rarity, level, x: slot.x, y: slot.y, card: card || makeCard('creature', key, rarity, level) });
     u.homeX = slot.x; u.homeY = slot.y; u.slot = slot;
     slot.unit = u; slot.reserved = false;
     u.sprite.setInteractive({ draggable: true, useHandCursor: true });
@@ -721,7 +808,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.cameras.main.shake(250, 0.004);
     this.time.delayedCall(300, () => {
-      const u = this.createAlly(card.id, card.rarity, slot);
+      const u = this.createAlly(card.id, card.rarity, slot, card.level || 1, card);
       u.hidden = true; u.rise = 88;
       u.sprite.anims.stop(); u.sprite.setFrame(9);
       this.fxDirt.explode(26, slot.x, slot.y);
@@ -743,7 +830,7 @@ export class GameScene extends Phaser.Scene {
     if (this.state !== 'prep' || this.hand.selected) return;
     const hidden = this.hand.cards.filter((c) => !c.revealed).length;
     if (hidden) this.setInfo('Ruh Kartları', `Kapalı kartlara dokunarak aç (${hidden} kapalı). Açık kartı seç ya da yukarı sürükleyip savaş alanına bırak.`);
-    else this.setInfo(`Dalga ${this.wave} yaklaşıyor`, 'Aynı türden ve seviyeden yaratıkları üst üste sürükleyerek seviye atlat. Hazırsan savaşa başla.');
+    else this.setInfo(`Dalga ${this.wave} yaklaşıyor`, 'Aynı kartları elde ya da aynı yaratıkları sahada üst üste sürükleyerek seviye atlat. Hazırsan savaşa başla.');
   }
 
   startPrep() {
@@ -762,6 +849,7 @@ export class GameScene extends Phaser.Scene {
 
   startBattle() {
     if (this.state !== 'prep') return;
+    this.closeBag();
     this.select(null);
     this.state = 'curses';
     this.btnDraw.show(false); this.btnStart.show(false);
@@ -772,7 +860,7 @@ export class GameScene extends Phaser.Scene {
         if (!v.revealed) v.reveal(true);
         this.hand.remove(v); v.busy = true;
         this.tweens.add({ targets: v.c, x: W / 2, y: 230, scale: 1.3, angle: 0, alpha: 1, duration: 320, ease: 'Cubic.easeOut' });
-        this.time.delayedCall(450, () => { this.cameras.main.flash(200, 180, 20, 30); sfx.curse(); this.applyCurse(v.card.id); this.fxUI.setParticleTint(0xe0303a); this.fxUI.explode(40, W / 2, 230); });
+        this.time.delayedCall(450, () => { this.cameras.main.flash(200, 180, 20, 30); sfx.curse(); this.grave.push(v.card); this.applyCurse(v.card.id); this.fxUI.setParticleTint(0xe0303a); this.fxUI.explode(40, W / 2, 230); });
         this.tweens.add({ targets: v.c, alpha: 0, scale: 1.7, delay: 650, duration: 280, onComplete: () => v.destroy() });
         this.hand.layout();
       });
@@ -806,6 +894,12 @@ export class GameScene extends Phaser.Scene {
       u.charged = false;
       if (this.buff.shield > 0) { u.shield = Math.round(u.maxHp * this.buff.shield); this.fxSoul.setParticleTint(0x9fdcff); this.fxSoul.explode(8, u.x, u.y - 40); }
     });
+    for (const u of this.units) if (u.team === 'ally' && !u.dead && u.ist('shield')) u.shield += Math.round(u.maxHp * u.ist('shield'));
+    if (this.wave % 5 === 0) {
+      const cid = Phaser.Utils.Array.GetRandom(Object.keys(CURSES));
+      this.deck.splice((Math.random() * (this.deck.length + 1)) | 0, 0, makeCard('curse', cid));
+      this.time.delayedCall(900, () => { this.floatText(W / 2, 220, 'Engizisyoncu destene bir lanet kattı!', '#ff6a5a', 18); sfx.curse(); this.updatePiles(); });
+    }
     this.spawnQueue = waveComposition(this.wave);
     this.spawnTimer = 0.4;
     if (this.lightsOn) this.tweens.add({ targets: this.holyLight, intensity: 1.4, duration: 600, yoyo: true });
@@ -847,10 +941,11 @@ export class GameScene extends Phaser.Scene {
       });
     });
     this.time.delayedCall(300, () => sfx.heal());
+    this.grave.push(...this.used); this.used = [];
     this.buff = { shield: 0, atk: 1 }; this.enemyMult = 1;
     this.projectiles.forEach((p) => this.killProjectile(p)); this.projectiles = [];
     this.updateHUD();
-    this.time.delayedCall(2100, () => { if (this.state === 'waveEnd') this.showBoons(); });
+    this.time.delayedCall(2100, () => { if (this.state === 'waveEnd') this.showCardReward(() => { if (this.wave % 2 === 0) this.showBoons(); else this.startPrep(); }); });
   }
 
   // ---------------------------------------------------------------- boons (run upgrades)
@@ -1042,7 +1137,12 @@ export class GameScene extends Phaser.Scene {
       this.kills++;
       this.score += u.base.boss ? 250 : 10 + this.wave;
       this.addSouls((u.base.souls || 3) + this.mods.soulBonus, u.x, u.y - 40);
-    } else if (u.slot) { u.slot.unit = null; u.slot = null; }
+      if (u.base.boss || (!u.base.hybrid && Math.random() < 0.08)) this.dropItem(u.x, u.y - 50, !!u.base.boss);
+    } else {
+      if (u.slot) { u.slot.unit = null; u.slot = null; }
+      if (u.card) { this.grave.push(u.card); u.card = null; }
+      if (u.item) { this.returnItem(u.item); u.item = null; this.floatText(u.x, u.y - 90, 'Eşya çantaya döndü', '#ffd36a', 13); }
+    }
     this.updateHUD();
   }
 
@@ -1137,3 +1237,5 @@ export class GameScene extends Phaser.Scene {
     if (this.state === 'battle' && !this.spawnQueue.length && !this.units.some((u) => u.team === 'enemy')) this.endWave();
   }
 }
+
+installDeckUI(GameScene.prototype, txt, Button);

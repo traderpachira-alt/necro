@@ -1,5 +1,5 @@
 // A battlefield combatant (necromancer, summoned creature or holy enemy).
-import { RARITIES, MAX_LEVEL } from './data.js';
+import { RARITIES, MAX_LEVEL, itemStats } from './data.js';
 import { sfx } from './audio.js';
 import { BF } from './layout.js';
 
@@ -33,6 +33,8 @@ export class Unit {
     this.radius = ['golem', 'giant', 'catapult', 'inquisitor', 'cavalry'].includes(this.key) ? 18 : 12;
     this.tex = opts.texKey || this.key;
     this.slot = null;
+    this.item = null;
+    this.card = opts.card || null;
     this.recalc(true);
 
     const lit = scene.lightsOn;
@@ -80,6 +82,18 @@ export class Unit {
 
   get alive() { return !this.dead; }
 
+  // item stat helper
+  ist(k) { return this.item ? (itemStats(this.item)[k] || 0) : 0; }
+
+  setItem(item) {
+    this.item = item;
+    this.itemIcon?.destroy(); this.itemIcon = null;
+    if (item) {
+      this.itemIcon = this.scene.add.image(this.x, this.y, 'item_' + item.id).setScale(0.26).setDepth(901);
+    }
+    this.recalc(false);
+  }
+
   playAnim(name) {
     const k = `${this.tex}_${name}`;
     if (this.sprite.anims.currentAnim?.key === k && this.sprite.anims.isPlaying) return;
@@ -107,7 +121,7 @@ export class Unit {
 
   drawBar() {
     const g = this.bar; g.clear();
-    if (this.dead || this.hidden) return;
+    if (this.dead || this.hidden) { this.itemIcon?.setVisible(false); return; }
     const big = this.radius > 12;
     const w = this.isNecro ? 56 : this.base.boss ? 60 : big ? 46 : 38, h = this.isNecro ? 6 : 5;
     const x = Math.round(this.x - w / 2), y = Math.round(this.y - (this.isNecro ? 98 : big ? 88 : 80)) + (this.dragging ? -14 : 0);
@@ -117,6 +131,11 @@ export class Unit {
     g.fillStyle(0x2a1a2a, 1).fillRect(x, y, w, h);
     g.fillStyle(col, 1).fillRect(x, y, Math.round(w * pct), h);
     g.fillStyle(0xffffff, 0.25).fillRect(x, y, Math.round(w * pct), 1);
+    if (this.itemIcon) {
+      this.itemIcon.setPosition(x - 12, y + 2).setVisible(!this.hidden);
+      g.fillStyle(0x05030a, 0.9).fillCircle(x - 12, y + 2, 10);
+      g.lineStyle(2, RARITIES[this.item.rarity].hex, 1).strokeCircle(x - 12, y + 2, 10);
+    }
     if (this.shield > 0) g.fillStyle(0x9fdcff, 0.9).fillRect(x, y - 3, Math.round(w * Math.min(1, this.shield / this.maxHp)), 2);
     if (this.team === 'ally' && !this.isNecro) {
       // level pips
@@ -168,7 +187,7 @@ export class Unit {
       if (this.team === 'ally') this.x = Math.min(this.x, 520);
       this.playAnim('walk');
     } else if (d <= reach) {
-      if (this.cd <= 0) { this.cd = this.base.cd * (0.9 + Math.random() * 0.2); this.doAttack(target, false); }
+      if (this.cd <= 0) { this.cd = (this.base.cd * (0.9 + Math.random() * 0.2)) / (1 + this.ist('haste')); this.doAttack(target, false); }
       else this.playAnim('idle');
     } else this.playAnim('idle');
   }
@@ -193,7 +212,8 @@ export class Unit {
       const proj = this.base.proj;
       let dmg = this.atk * game.atkMult(this);
       let crit = false;
-      if (this.base.crit && Math.random() < this.base.crit) { dmg *= 2; crit = true; }
+      const critCh = (this.base.crit || 0) + this.ist('crit');
+      if (critCh && Math.random() < critCh) { dmg *= 2; crit = true; }
       if (this.base.charge && !this.charged) { this.charged = true; dmg *= 2; crit = true; game.floatText(this.x, this.y - 96, 'HÜCUM!', '#ffd36a', 18); }
       if (proj) game.spawnProjectile(this, target, proj, dmg, false, crit);
       else game.meleeHit(this, target, dmg, crit);
@@ -202,7 +222,11 @@ export class Unit {
 
   takeDamage(dmg, crit, src, melee) {
     if (this.dead) return;
+    const dodge = this.ist('dodge');
+    if (dodge && src && Math.random() < dodge) { this.scene.floatText(this.x, this.y - 72, 'KAÇTI', '#c8b0ff', 15); return; }
     dmg = Math.round(dmg);
+    const ls = src && !src.dead ? src.ist('lifesteal') : 0;
+    if (ls && dmg > 0) src.receiveHeal(dmg * ls, true);
     if (this.shield > 0) { const a = Math.min(this.shield, dmg); this.shield -= a; dmg -= a; }
     this.hp -= dmg;
     const game = this.scene;
@@ -214,15 +238,16 @@ export class Unit {
     game.hitSparks(this.x, this.y - 40, this.team === 'ally' ? 0xc8ffb8 : 0xfff2c0, crit ? 14 : 6);
     if (crit) sfx.crit(); else sfx.hit();
     // thorns
-    if (this.base.reflect && melee && src && !src.dead && dmg > 0) src.takeDamage(dmg * this.base.reflect, false, this, false);
+    const refl = (this.base.reflect || 0) + this.ist('reflect');
+    if (refl && melee && src && !src.dead && dmg > 0) src.takeDamage(dmg * refl, false, this, false);
     if (this.hp <= 0) { this.die(); if (src && !src.dead) game.onKill(src, this); }
   }
 
-  receiveHeal(v) {
+  receiveHeal(v, silent) {
     if (this.dead) return;
     const amt = Math.min(Math.round(v), this.maxHp - this.hp);
     this.hp += amt;
-    if (amt > 0) this.scene.floatText(this.x, this.y - 74, `+${amt}`, '#6dff9a', 15);
+    if (amt > 0 && !silent) this.scene.floatText(this.x, this.y - 74, `+${amt}`, '#6dff9a', 15);
   }
 
   die() {
@@ -245,6 +270,7 @@ export class Unit {
       game.tweens.add({ targets: [this.sprite, this.glow], y: this.y - 30, alpha: 0, duration: 650, ease: 'Sine.easeIn' });
     }
     game.tweens.add({ targets: [this.shadow, this.aura].filter(Boolean), alpha: 0, duration: 400 });
+    this.itemIcon?.destroy(); this.itemRing?.destroy();
     game.time.delayedCall(800, () => { parts.forEach((p) => p.destroy()); this.flash.destroy(); this.bar.destroy(); });
   }
 
@@ -252,6 +278,6 @@ export class Unit {
   vanish() {
     this.dead = true;
     this.auraTween?.remove();
-    [this.sprite, this.glow, this.flash, this.shadow, this.aura, this.bar].forEach((p) => p && p.destroy());
+    [this.sprite, this.glow, this.flash, this.shadow, this.aura, this.bar, this.itemIcon, this.itemRing].forEach((p) => p && p.destroy());
   }
 }
