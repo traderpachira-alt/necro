@@ -110,9 +110,9 @@ export function installDeckUI(proto, txt, Button) {
       });
     });
     const skip = new Button(this, W / 2, H - 80, 280, 62, 'GEÇ', 0x4a4258, () => {
-      if (picked) return; picked = true; this.addSouls(10); finish();
+      if (picked) return; picked = true; this.addSouls(8 + this.wave); finish();
     }).setDepth(1702);
-    skip.set('GEÇ', '+10 ruh');
+    skip.set('GEÇ', `+${8 + this.wave} ruh`);
     L.push(skip);
   };
 
@@ -127,7 +127,10 @@ export function installDeckUI(proto, txt, Button) {
     const hit = this.add.zone(x, y, 120, 36).setInteractive({ useHandCursor: true }).setDepth(1005);
     hit.on('pointerup', () => this.openBag());
     this.bagHit = hit;
+    this.bagParts = [g, this.bagBtn, hit];
   };
+
+  proto.showBagButton = function (on) { (this.bagParts || []).forEach((o) => o.setVisible(on)); if (this.bagHit) this.bagHit.input.enabled = on; };
 
   proto.dropItem = function (x, y, boss) {
     const item = rollItem(this.meta.luck + this.mods.luck, boss);

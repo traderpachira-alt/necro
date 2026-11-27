@@ -83,6 +83,9 @@ export const CONFIG = {
   purgeCost: 12,
   waveHealPct: 0.2,
   bansheeWaveHealPct: 0.1,
+  upgradeCost: [20, 40, 75], // soul cost to raise a hand card's rarity (by current rarity)
+  necroHealCost: 15, necroHealPct: 0.3,
+  soulsPerDarkSoul: 25,
 };
 
 export function rarityWeights(luck = 0) {

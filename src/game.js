@@ -9,10 +9,10 @@ import {
 } from './data.js';
 import { installEvents } from './events.js';
 import { installDeckUI } from './deckui.js';
-import { sfx, unlockAudio, toggleMute, isMuted } from './audio.js';
+import { sfx, unlockAudio, toggleMute, isMuted, buzz } from './audio.js';
 import { TITLE, BODY, ZOOM } from './fonts.js';
 import { W, H, BF, PANEL_Y, INFO_Y, INFO_H, BTN_Y, DECK } from './layout.js';
-import { save, metaLevel, recordRun, discover } from './save.js';
+import { save, metaLevel, recordRun, discover, persist } from './save.js';
 import { drawBoonFrame, BOON_W, BOON_H } from './cardart.js';
 import { CARD_SCALE } from './layout.js';
 
@@ -78,6 +78,7 @@ export class GameScene extends Phaser.Scene {
     this.buff = { shield: 0, atk: 1 }; this.enemyMult = 1; this.pendingRarity = 0; this.drawsThisPrep = 0;
     this.fusionCharges = 0;
     this.speedMul = 1;
+    try { this.preferredSpeed = +localStorage.getItem('necro_speed') === 2 ? 2 : 1; } catch (e) { this.preferredSpeed = 1; }
     this.deck = Phaser.Utils.Array.Shuffle(STARTER_DECK.map(([k, id]) => makeCard(k, id)));
     this.grave = []; this.used = []; this.bag = [];
     this.unlockedRituals = {};
@@ -195,6 +196,9 @@ export class GameScene extends Phaser.Scene {
     this.btnSpeed = new Button(this, bx2, BTN_Y, bw2, 62, 'HIZ x1', 0x6a4a2a, () => this.toggleSpeed()).show(false);
 
     this.unitCountText = txt(this, W - 14, PANEL_Y - 30, '', 17, '#ddd0f4').setOrigin(1, 0).setDepth(1001);
+    // small action button inside the info box (rarity upgrade for a selected creature card / heal for the Necromancer)
+    this.miniBtn = new Button(this, W - 76, INFO_Y + 22, 124, 38, '', 0xb8862a, () => this.miniAction()).setDepth(1006).show(false);
+    this.miniBtn.t.setFontSize(15); this.miniBtn.sub.setFontSize(13);
     this.fusionText = txt(this, 14, PANEL_Y - 30, '', 17, '#e8a8ff').setDepth(1001);
     this.input.on('pointerdown', (p, objs) => { if (!objs.length && (this.hand.selected || this.selUnit)) this.select(null); });
   }
@@ -357,7 +361,7 @@ export class GameScene extends Phaser.Scene {
       const u = unitOf(obj);
       if (u) {
         if (u.wasDragged) { u.wasDragged = false; return; }
-        if (this.state === 'prep' && u.team === 'ally' && !u.hidden && (!u.isNecro || u.item)) this.selectUnit(u); else this.showUnitInfo(u);
+        if (this.state === 'prep' && u.team === 'ally' && !u.hidden) this.selectUnit(u); else this.showUnitInfo(u);
         return;
       }
       const v = viewOf(obj); if (!v) return;
@@ -465,7 +469,7 @@ export class GameScene extends Phaser.Scene {
     sfx.click();
   }
   levelUpFx(t, text, color = 0xffd36a) {
-    sfx.epic();
+    sfx.epic(); buzz(40);
     this.cameras.main.flash(120, 255, 230, 160);
     this.fxSwirl.setParticleTint(color); this.fxSwirl.explode(30, t.x, t.y - 40);
     this.fxSoul.setParticleTint(color); this.fxSoul.explode(24, t.x, t.y - 30);
@@ -616,7 +620,10 @@ export class GameScene extends Phaser.Scene {
     this.highlightUnit(u, 0xb8ffc8);
     this.showUnitInfo(u);
     this.btnDraw.show(false); this.btnStart.show(false);
-    this.btnA.show(!u.isNecro).set('TOPRAĞA GÖM', `+${this.buryValue(u)} ruh`).setColor(0x8a2a3a).setEnabled(true);
+    if (u.isNecro) {
+      const need = u.hp < u.maxHp;
+      this.btnA.show(true).set('İYİLEŞTİR', `${CONFIG.necroHealCost} ruh • %${CONFIG.necroHealPct * 100}`).setColor(0x2f8a6a).setEnabled(need && this.souls >= CONFIG.necroHealCost);
+    } else this.btnA.show(true).set('TOPRAĞA GÖM', `+${this.buryValue(u)} ruh`).setColor(0x8a2a3a).setEnabled(true);
     if (u.item) this.btnB.show(true).set('EŞYAYI ÇIKAR', 'çantaya koy').setColor(0x6a4a2a).setEnabled(true);
     else this.btnB.show(true).set('KAPAT').setColor(0x4a4258).setEnabled(true);
   }
@@ -638,6 +645,7 @@ export class GameScene extends Phaser.Scene {
 
   select(v, silent) {
     if (this.selUnit) { this.highlightUnit(null); this.selUnit = null; }
+    this.miniBtn.show(false); this.miniMode = null; this.showBagButton(true);
     this.hand.selected = v;
     if (!silent) this.hand.layout();
     if (!v) {
@@ -659,6 +667,12 @@ export class GameScene extends Phaser.Scene {
     }
     const reroll = this.rerollCost();
     this.btnA.set('YENİDEN ÇEK', `${reroll} ruh`).setColor(0x5a3a9a).setEnabled(this.souls >= reroll);
+    if (card.kind === 'creature' && card.rarity < 3) {
+      const uc = CONFIG.upgradeCost[card.rarity];
+      this.miniMode = 'upgrade';
+      this.miniBtn.show(true).set(`▲ ${RARITIES[card.rarity + 1].name.toUpperCase()}`, `${uc} ruh`).setEnabled(this.souls >= uc);
+      this.showBagButton(false);
+    }
     if (card.kind === 'creature') {
       const C = CREATURES[card.id], R = RARITIES[card.rarity], st = this.previewStats(card.id, card.rarity, card.level || 1);
       this.setInfo(`${C.name}  •  Sv.${card.level || 1} ${R.name}`,
@@ -680,7 +694,16 @@ export class GameScene extends Phaser.Scene {
   drawCost() { return Math.max(3, CONFIG.drawCost + CONFIG.drawCostStep * this.drawsThisPrep - this.mods.discount); }
 
   cardActionA() {
-    if (this.selUnit) { const u = this.selUnit; this.select(null); if (!u.dead && this.state === 'prep') this.buryUnit(u); return; }
+    if (this.selUnit) {
+      const u = this.selUnit;
+      if (u.isNecro) {
+        if (this.souls < CONFIG.necroHealCost || u.hp >= u.maxHp) return;
+        this.souls -= CONFIG.necroHealCost; u.receiveHeal(u.maxHp * CONFIG.necroHealPct); sfx.heal();
+        this.fxSoul.setParticleTint(0x6dff9a); this.fxSoul.explode(16, u.x, u.y - 40);
+        this.updateHUD(); this.selectUnit(u); return;
+      }
+      this.select(null); if (!u.dead && this.state === 'prep') this.buryUnit(u); return;
+    }
     const v = this.hand.selected; if (!v) return;
     if (v.card.kind === 'curse') {
       if (this.souls < CONFIG.purgeCost) return;
@@ -787,7 +810,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   legendaryReveal(v) {
-    sfx.legendary();
+    sfx.legendary(); buzz([40, 60, 80]);
     const dark = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0).setDepth(1290);
     const rays = this.add.image(v.c.x, v.c.y, 'rays').setTint(0xffd36a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1291).setScale(0.2).setAlpha(0.9);
     const t = txt(this, W / 2, 420, 'EFSANEVİ!', 50, '#ffd36a', T).setOrigin(0.5).setDepth(1460).setScale(0.2);
@@ -920,16 +943,22 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- flow
   prepInfo() {
-    if (this.state !== 'prep' || this.hand.selected) return;
-    const hidden = this.hand.cards.filter((c) => !c.revealed).length;
-    if (hidden) this.setInfo('Ruh Kartları', `Kapalı kartlara dokunarak aç (${hidden} kapalı). Açık kartı seç ya da yukarı sürükleyip savaş alanına bırak.`);
-    else this.setInfo(`Dalga ${this.wave} yaklaşıyor`, 'Aynı kartları elde ya da aynı yaratıkları sahada üst üste sürükleyerek seviye atlat. Hazırsan savaşa başla.');
+    if (this.state !== 'prep' || this.hand.selected || this.selUnit) return;
+    this.setInfo(`Dalga ${this.wave} geliyor`, `Gelecek: ${this.wavePreview()}\nKartı yukarı sürükleyerek oyna; aynı kartları üst üste sürükleyerek seviye atlat.`, '#fff2d0');
+  }
+  wavePreview() {
+    const counts = {};
+    for (const k of this.nextComp || []) counts[k] = (counts[k] || 0) + 1;
+    const short = { crusader: 'Kılıççı', knight: 'Şövalye', priest: 'Rahip', hunter: 'Avcı', paladin: 'Paladin', firepriest: 'Ateş Rahibi', inquisitor: 'ENGİZİSYONCU', archangel: 'BAŞMELEK' };
+    return Object.entries(counts).map(([k, n]) => `${n} ${short[k] || ENEMIES[k].name}`).join(', ');
   }
 
   startPrep() {
     this.state = 'prep';
     this.wave++;
     this.drawsThisPrep = 0;
+    this.nextComp = waveComposition(this.wave);
+    this.tutorialHint();
     this.phaseText.setText('Hazırlık');
     this.banner(`DALGA ${this.wave}`, '#d8c8ff', this.wave % 5 === 0 ? 'Engizisyoncu geliyor!' : 'Hazırlık evresi');
     this.btnSpeed.show(false); this.btnDraw.show(true); this.btnStart.show(true).setEnabled(true);
@@ -993,7 +1022,8 @@ export class GameScene extends Phaser.Scene {
       this.deck.splice((Math.random() * (this.deck.length + 1)) | 0, 0, makeCard('curse', cid));
       this.time.delayedCall(900, () => { this.floatText(W / 2, 220, 'Engizisyoncu destene bir lanet kattı!', '#ff6a5a', 18); sfx.curse(); this.updatePiles(); });
     }
-    this.spawnQueue = waveComposition(this.wave);
+    this.spawnQueue = (this.nextComp || waveComposition(this.wave)).slice();
+    if (this.speedMul !== this.preferredSpeed) this.toggleSpeed(true);
     this.spawnTimer = 0.4;
     if (this.lightsOn) this.tweens.add({ targets: this.holyLight, intensity: 1.4, duration: 600, yoyo: true });
   }
@@ -1103,7 +1133,8 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- end of run
   endRunRewards() {
     if (this.rewarded) return this.rewarded;
-    const earned = Math.floor(this.score / 80) + this.wave * 2;
+    this.leftoverDark = Math.floor(this.souls / CONFIG.soulsPerDarkSoul);
+    const earned = Math.floor(this.score / 80) + this.wave * 2 + this.leftoverDark;
     save.darkSouls += earned;
     recordRun(this.score, this.wave, this.kills);
     this.rewarded = earned;
@@ -1129,7 +1160,7 @@ export class GameScene extends Phaser.Scene {
   gameOver() {
     if (this.state === 'over') return;
     this.state = 'over';
-    sfx.gameOver();
+    sfx.gameOver(); buzz([100, 80, 200]);
     const prevBest = save.best;
     const earned = this.endRunRewards();
     this.time.delayedCall(900, () => {
@@ -1142,7 +1173,7 @@ export class GameScene extends Phaser.Scene {
         txt(this, W / 2, cy + 130, `Ulaşılan dalga: ${this.wave}`, 26).setOrigin(0.5),
         txt(this, W / 2, cy + 168, `Skor: ${this.score}${this.score > prevBest ? '  (YENİ REKOR!)' : ''}`, 26, '#ffd36a').setOrigin(0.5),
         txt(this, W / 2, cy + 206, `En iyi skor: ${save.best}  •  Öldürülen: ${this.kills}`, 19, '#c8b8e8').setOrigin(0.5),
-        txt(this, W / 2, cy + 254, `+${earned} Kara Ruh`, 28, '#c88aff', T).setOrigin(0.5),
+        txt(this, W / 2, cy + 254, `+${earned} Kara Ruh${this.leftoverDark ? `  (${this.leftoverDark} harcanmayan ruhtan)` : ''}`, 24, '#c88aff', T).setOrigin(0.5),
         txt(this, W / 2, cy + 290, 'Ana menüde kalıcı yükseltmelere harca', 17, '#b8a8d8').setOrigin(0.5),
       ];
       els.forEach((e, i) => { e.setDepth(2001).setAlpha(0); this.tweens.add({ targets: e, alpha: 1, delay: 300 + i * 120, duration: 400 }); });
@@ -1152,8 +1183,9 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  toggleSpeed() {
+  toggleSpeed(auto) {
     this.speedMul = this.speedMul === 1 ? 2 : 1;
+    if (!auto) { this.preferredSpeed = this.speedMul; try { localStorage.setItem('necro_speed', String(this.speedMul)); } catch (e) { /* ignore */ } }
     this.tweens.timeScale = this.speedMul; this.time.timeScale = this.speedMul; this.anims.globalTimeScale = this.speedMul;
     this.btnSpeed.set(`HIZ x${this.speedMul}`);
   }
@@ -1364,3 +1396,29 @@ export class GameScene extends Phaser.Scene {
 
 installDeckUI(GameScene.prototype, txt, Button);
 installEvents(GameScene.prototype, txt, Button);
+
+GameScene.prototype.miniAction = function () {
+  const v = this.hand.selected;
+  if (this.miniMode !== 'upgrade' || !v || v.card.kind !== 'creature' || v.card.rarity >= 3) return;
+  const cost = CONFIG.upgradeCost[v.card.rarity];
+  if (this.souls < cost) return;
+  this.souls -= cost;
+  v.card.rarity++;
+  v.refresh();
+  this.fxUI.setParticleTint(RARITIES[v.card.rarity].hex); this.fxUI.explode(30, v.c.x, v.c.y);
+  if (v.card.rarity === 3) this.legendaryReveal(v); else { sfx.epic(); buzz(30); }
+  this.updateHUD();
+  this.select(v);
+};
+
+// first-run guidance, shown as toasts during the first waves
+GameScene.prototype.tutorialHint = function () {
+  if (save.tutorialDone) return;
+  const tips = {
+    1: ['Kartlar kendiliğinden açılır. Bir yaratık kartını yukarı sürükleyip savaş alanına bırakarak çağır.', 'Hazır olunca SAVAŞA BAŞLA. Yaratıkların ve Necromancer otomatik savaşır.'],
+    2: ['Aynı türden ve seviyeden iki kartı elde üst üste sürüklersen kart seviye atlar.', 'Sahadaki bir yaratığa ya da Necromancer\'a dokunarak seçenekleri gör.'],
+    3: ['Düşmanlardan düşen eşyaları ÇANTA\'dan yaratıkların üstüne sürükleyerek tak.', 'Üstteki sinerjiler aynı türden yaratıkları bir araya getirince güçlenir.'],
+  }[this.wave];
+  if (!tips) { save.tutorialDone = true; persist(); return; }
+  tips.forEach((t, i) => this.time.delayedCall(1800 + i * 2600, () => { if (this.state === 'prep') this.notify(t, '#c8b0ff'); }));
+};

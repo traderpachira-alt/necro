@@ -62,3 +62,6 @@ export const sfx = {
   soul() { if (throttle('soul', 50)) return; tone({ type: 'sine', f0: 1200, f1: 1800, dur: 0.08, vol: 0.05 }); },
   error() { tone({ type: 'square', f0: 160, f1: 120, dur: 0.15, vol: 0.1 }); },
 };
+
+// short vibration on supported phones (silent when muted)
+export function buzz(ms = 30) { try { if (!muted && navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* ignore */ } }

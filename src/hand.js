@@ -135,7 +135,10 @@ export class Hand {
     const v = new CardView(this.scene, this, card);
     v.c.setAlpha(0);
     this.cards.push(v);
-    this.scene.time.delayedCall(delay, () => { if (!v.c.active) return; v.dealt = true; v.c.setAlpha(1); sfx.deal(); this.layout(); });
+    this.scene.time.delayedCall(delay, () => { if (!v.c.active) return; v.dealt = true; v.c.setAlpha(1); sfx.deal(); this.layout();
+      // cards flip open by themselves shortly after landing in the hand
+      this.scene.time.delayedCall(320 + this.cards.indexOf(v) * 40, () => { if (v.c.active && !v.revealed && this.scene.state !== 'curses') v.reveal(); });
+    });
     return v;
   }
 

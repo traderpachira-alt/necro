@@ -55,17 +55,18 @@ export function installEvents(proto, txt, Button) {
   proto.eventOptions = function (id, finish) {
     const leave = { label: 'AYRIL', color: 0x4a4258, run: () => finish('Sessizce yoluna devam ediyorsun.', '#c8b8e8') };
     if (id === 'merchant') {
+      const pc = 25 + this.wave * 2, pi = 30 + this.wave * 2, pl = 20 + this.wave;
       const card = makeCard('creature', BASE_CREATURES[(Math.random() * BASE_CREATURES.length) | 0], Math.min(3, rollRarity(this.meta.luck + this.mods.luck) + 1));
       const item = rollItem(this.meta.luck + this.mods.luck);
       const curses = this.allCards().filter((c) => c.kind === 'curse');
       const o = [
-        { label: `KART: ${CREATURES[card.id].name}`, sub: `${RARITIES[card.rarity].name} • 30 ruh`, color: 0x3a5a9a, enabled: this.souls >= 30,
-          run: () => { this.souls -= 30; this.deck.splice((Math.random() * (this.deck.length + 1)) | 0, 0, card); finish(`${RARITIES[card.rarity].name} ${CREATURES[card.id].name} destene eklendi.`); } },
-        { label: `EŞYA: ${ITEMS[item.id].name}`, sub: `${RARITIES[item.rarity].name} • 35 ruh`, color: 0x6a4a2a, enabled: this.souls >= 35 && this.bag.length < BAG_SIZE,
-          run: () => { this.souls -= 35; this.bag.push(item); finish(`${ITEMS[item.id].name} çantana kondu: ${itemDesc(item)}.`); } },
+        { label: `KART: ${CREATURES[card.id].name}`, sub: `${RARITIES[card.rarity].name} • ${pc} ruh`, color: 0x3a5a9a, enabled: this.souls >= pc,
+          run: () => { this.souls -= pc; this.deck.splice((Math.random() * (this.deck.length + 1)) | 0, 0, card); finish(`${RARITIES[card.rarity].name} ${CREATURES[card.id].name} destene eklendi.`); } },
+        { label: `EŞYA: ${ITEMS[item.id].name}`, sub: `${RARITIES[item.rarity].name} • ${pi} ruh`, color: 0x6a4a2a, enabled: this.souls >= pi && this.bag.length < BAG_SIZE,
+          run: () => { this.souls -= pi; this.bag.push(item); finish(`${ITEMS[item.id].name} çantana kondu: ${itemDesc(item)}.`); } },
       ];
-      if (curses.length) o.push({ label: 'LANETLERİ SAT', sub: `${curses.length} lanet kartı • 25 ruh`, color: 0x8a2a3a, enabled: this.souls >= 25,
-        run: () => { this.souls -= 25; const ids = new Set(curses.map((c) => c.uid)); for (const k of ['deck', 'grave', 'used']) this[k] = this[k].filter((c) => !ids.has(c.uid)); finish('Tüccar lanetleri alıp sisin içinde kayboldu.'); } });
+      if (curses.length) o.push({ label: 'LANETLERİ SAT', sub: `${curses.length} lanet kartı • ${pl} ruh`, color: 0x8a2a3a, enabled: this.souls >= pl,
+        run: () => { this.souls -= pl; const ids = new Set(curses.map((c) => c.uid)); for (const k of ['deck', 'grave', 'used']) this[k] = this[k].filter((c) => !ids.has(c.uid)); finish('Tüccar lanetleri alıp sisin içinde kayboldu.'); } });
       o.push(leave);
       return o;
     }
