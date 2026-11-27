@@ -255,13 +255,50 @@ export class GameScene extends Phaser.Scene {
     const s = sub ? txt(this, W / 2, 196, sub, 20, '#ddd0f4').setOrigin(0.5).setDepth(1450).setAlpha(0) : null;
     this.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 300, ease: 'Back.easeOut' });
     if (s) this.tweens.add({ targets: s, alpha: 1, duration: 300, delay: 150 });
-    this.tweens.add({ targets: [t, s].filter(Boolean), alpha: 0, y: '-=20', delay: 1500, duration: 400, onComplete: () => { t.destroy(); s?.destroy(); } });
+    this.tweens.add({ targets: [t, s].filter(Boolean), alpha: 0, y: '-=20', delay: 2600, duration: 500, onComplete: () => { t.destroy(); s?.destroy(); } });
   }
 
   floatText(x, y, s, color, size = 16) {
+    s = String(s);
+    // sentences are information, not combat feedback: show them as a readable toast instead
+    if (s.length > 12 && /[a-zçğıöşü]{3}/i.test(s)) { this.notify(s, color); return; }
+    const isNumber = /^[+\-]?\d+!?$/.test(s);
+    const life = isNumber ? 750 : 1600;
     const t = txt(this, x, y, s, Math.round(size * 1.25), color).setOrigin(0.5).setDepth(1350);
-    this.tweens.add({ targets: t, y: y - 34, duration: 750, ease: 'Cubic.easeOut' });
-    this.tweens.add({ targets: t, alpha: 0, delay: 450, duration: 300, onComplete: () => t.destroy() });
+    this.tweens.add({ targets: t, y: y - 34, duration: life, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: t, alpha: 0, delay: life - 300, duration: 300, onComplete: () => t.destroy() });
+  }
+
+  // Readable message toasts: stacked under the HUD, stay on screen long enough to read (real time, unaffected by game speed)
+  notify(s, color = '#fff2d0') {
+    this.toasts = (this.toasts || []).filter((t) => t.c.active);
+    if (this.toasts.some((t) => t.text === s)) return;
+    while (this.toasts.length >= 4) this.dismissToast(this.toasts[0]);
+    const c = this.add.container(W / 2, 0).setDepth(1455);
+    const t = txt(this, 0, 0, s, 17, color, { align: 'center', wordWrap: { width: W - 70 }, strokeThickness: 3 }).setOrigin(0.5);
+    const w = Math.min(W - 30, t.width + 30), h = t.height + 14;
+    const g = this.add.graphics();
+    g.fillStyle(0x05030a, 0.88).fillRoundedRect(-w / 2, -h / 2, w, h, 10);
+    g.lineStyle(2, Phaser.Display.Color.HexStringToColor(color).color, 0.8).strokeRoundedRect(-w / 2, -h / 2, w, h, 10);
+    c.add([g, t]); c.setAlpha(0);
+    const toast = { c, h, text: s };
+    this.toasts.push(toast);
+    this.layoutToasts();
+    this.tweens.add({ targets: c, alpha: 1, duration: 200 / this.speedMul * this.speedMul });
+    const life = Math.min(6000, 2600 + s.length * 45) * this.speedMul; // scene time is scaled by game speed
+    toast.timer = this.time.delayedCall(life, () => this.dismissToast(toast));
+    c.setSize(w, h).setInteractive().on('pointerup', () => this.dismissToast(toast));
+  }
+  dismissToast(toast) {
+    if (toast.gone) return;
+    toast.gone = true; toast.timer?.remove();
+    this.toasts = this.toasts.filter((t) => t !== toast);
+    this.tweens.add({ targets: toast.c, alpha: 0, duration: 300, onComplete: () => { toast.c.destroy(); } });
+    this.layoutToasts();
+  }
+  layoutToasts() {
+    let y = 120;
+    for (const t of this.toasts) { this.tweens.add({ targets: t.c, y: y + t.h / 2, duration: 180 }); if (!t.c.y) t.c.y = y + t.h / 2; y += t.h + 6; }
   }
 
   addSouls(n, fromX, fromY) {
@@ -546,7 +583,7 @@ export class GameScene extends Phaser.Scene {
         const t2 = txt(this, W / 2, 180, `${CREATURES[hybrid].name} Grimuar'a eklendi`, 19, '#f2e8ff').setOrigin(0.5).setDepth(1460).setAlpha(0);
         this.tweens.add({ targets: t, scale: 1, duration: 400, ease: 'Back.easeOut' });
         this.tweens.add({ targets: t2, alpha: 1, delay: 200, duration: 300 });
-        this.tweens.add({ targets: [t, t2], alpha: 0, delay: 2400, duration: 400, onComplete: () => { t.destroy(); t2.destroy(); } });
+        this.tweens.add({ targets: [t, t2], alpha: 0, delay: 4000, duration: 500, onComplete: () => { t.destroy(); t2.destroy(); } });
       }
       this.showUnitInfo(u);
       this.updateHUD();
@@ -757,7 +794,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: dark, fillAlpha: 0.55, duration: 200, yoyo: true, hold: 900 });
     this.tweens.add({ targets: rays, scale: 2.4, angle: 90, alpha: 0, duration: 1600, ease: 'Cubic.easeOut', onComplete: () => rays.destroy() });
     this.tweens.add({ targets: t, scale: 1, duration: 400, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: t, alpha: 0, y: 390, delay: 1100, duration: 400, onComplete: () => { t.destroy(); dark.destroy(); } });
+    this.tweens.add({ targets: t, alpha: 0, y: 390, delay: 1800, duration: 400, onComplete: () => { t.destroy(); dark.destroy(); } });
     this.cameras.main.flash(250, 255, 220, 140);
     this.cameras.main.shake(300, 0.008);
     this.fxUI.setParticleTint(0xffd36a); this.fxUI.explode(60, v.c.x, v.c.y);
