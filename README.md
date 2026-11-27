@@ -8,6 +8,7 @@ Tarayıcıda (telefonda da) oynanan, dikey ekranlı 2D pixel-art bir oyun. Necro
 
 - **Deste:** Her oyun 12 kartlık başlangıç destesiyle başlar. Her hazırlık evresinde desteden 3 kart çekilir; oynanan kartlar ve ölen yaratıkların kartları Mezarlık'a gider, deste bitince Mezarlık karıştırılıp geri döner. Dalga sonlarında 3 karttan biri desteye eklenir. Lanetler boss dalgalarında desteye karışır (ruh harcayarak arındırılabilir).
 - **Elde birleştirme:** Aynı türden ve seviyeden iki kartı elde üst üste sürükle; kart kalıcı olarak seviye atlar. Aynı iki ritüel birleşince "II" sürümü oluşur.
+- **Ruh Pazarı:** Hazırlıkta PAZAR düğmesiyle açılır. Dükkân (yaratık/ritüel kartları, eşya, vitrin yenileme), Hizmetler (kart çekme, ruhla çağırma, kart silme, kart yükseltme) ve Ordu (oyun boyu kalıcı güçler, +2 yaratık yuvasına kadar). Dalga sonunda biriken her 20 ruh için +2 faiz (en fazla +10).
 - **Çanta:** Düşmanlardan eşya düşer (boss her zaman). Eşyalar çantadan yaratıkların ya da Necromancer'ın üstüne sürüklenerek takılır.
 - **Nadirlik:** Sıradan, Nadir, Epik, Efsanevi; statları ×1 / ×1.3 / ×1.7 / ×2.2 etkiler.
 - **Birleştirme:** Aynı türden ve seviyeden iki yaratığı üst üste sürükle, seviye atlasın (en fazla Sv.5). Yaratık kartı da aynı türden Sv.1 yaratığın üstüne bırakılabilir. Alan doluysa kart feda edilip ruha çevrilebilir.

@@ -9,6 +9,7 @@ import {
 } from './data.js';
 import { installEvents } from './events.js';
 import { installAtmosphere } from './atmos.js';
+import { installShop } from './shop.js';
 import { installDeckUI } from './deckui.js';
 import { sfx, unlockAudio, toggleMute, isMuted, buzz } from './audio.js';
 import { TITLE, BODY, ZOOM } from './fonts.js';
@@ -78,6 +79,8 @@ export class GameScene extends Phaser.Scene {
     this.souls = CONFIG.startSouls + this.meta.purse * 10;
     this.buff = { shield: 0, atk: 1 }; this.enemyMult = 1; this.pendingRarity = 0; this.drawsThisPrep = 0;
     this.fusionCharges = 0;
+    this.maxUnits = CONFIG.maxUnits;
+    this.army = { hp: 0, atk: 0, slots: 0, magic: 0 };
     this.speedMul = 1;
     try { this.preferredSpeed = +localStorage.getItem('necro_speed') === 2 ? 2 : 1; } catch (e) { this.preferredSpeed = 1; }
     this.deck = Phaser.Utils.Array.Shuffle(STARTER_DECK.map(([k, id]) => makeCard(k, id)));
@@ -109,11 +112,11 @@ export class GameScene extends Phaser.Scene {
     const it = u.item ? itemStats(u.item) : {};
     const sy = u.syn || {};
     const ih = (1 + (it.hp || 0)) * (1 + (sy.hp || 0)), ia = (1 + (it.atk || 0)) * (1 + (sy.atk || 0));
-    if (u.isNecro) return { hp: (1 + 0.1 * this.meta.body) * (1 + this.mods.necroHp) * ih, atk: (1 + this.mods.necroAtk) * ia, heal: 1 };
+    if (u.isNecro) return { hp: (1 + 0.1 * this.meta.body) * (1 + this.mods.necroHp) * ih, atk: (1 + this.mods.necroAtk + (this.army?.magic || 0)) * ia, heal: 1 };
     const role = u.base.role, rm = RARITIES[u.rarity].mult * levelMult(u.level);
     return {
-      hp: rm * (1 + this.mods.roleHp[role] + 0.06 * this.meta.bone) * ih,
-      atk: rm * (1 + this.mods.roleAtk[role] + 0.06 * this.meta.rage) * ia,
+      hp: rm * (1 + this.mods.roleHp[role] + 0.06 * this.meta.bone + (this.army?.hp || 0)) * ih,
+      atk: rm * (1 + this.mods.roleAtk[role] + 0.06 * this.meta.rage + (this.army?.atk || 0)) * ia,
       heal: rm * (1 + this.mods.heal),
     };
   }
@@ -191,7 +194,7 @@ export class GameScene extends Phaser.Scene {
     this.buildPiles();
     this.buildBagButton();
     const bx1 = 178, bx2 = 362, bw1 = 162, bw2 = 182;
-    this.btnDraw = new Button(this, bx1, BTN_Y, bw1, 62, 'KART ÇEK', 0x5a3a9a, () => this.buyCard());
+    this.btnDraw = new Button(this, bx1, BTN_Y, bw1, 62, 'PAZAR', 0x8a5a1a, () => this.openShop());
     this.btnStart = new Button(this, bx2, BTN_Y, bw2, 62, 'SAVAŞA BAŞLA', 0x2f8a4a, () => this.startBattle());
     this.btnA = new Button(this, bx1, BTN_Y, bw1, 62, '', 0x5a3a9a, () => this.cardActionA()).show(false);
     this.btnB = new Button(this, bx2, BTN_Y, bw2, 62, '', 0x2f8a4a, () => this.cardActionB()).show(false);
@@ -247,12 +250,12 @@ export class GameScene extends Phaser.Scene {
     this.waveText.setText(`DALGA ${this.wave}`);
     this.scoreText.setText(String(this.score));
     this.soulText.setText(String(this.souls));
-    this.unitCountText.setText(`Yaratık ${this.allyCreatures().length}/${CONFIG.maxUnits}`);
+    this.unitCountText.setText(`Yaratık ${this.allyCreatures().length}/${this.maxUnits}`);
     this.fusionText.setText(this.fusionCharges > 0 ? `Füzyon hakkı: ${this.fusionCharges}` : '');
     this.updatePiles();
     if (this.state === 'prep' && !this.hand.selected) {
       const cost = this.drawCost();
-      this.btnDraw.set('KART ÇEK', `${cost} ruh`).setEnabled(this.souls >= cost && this.hand.size < CONFIG.maxHand && this.deck.length + this.grave.length > 0);
+      this.btnDraw.set('PAZAR', 'dükkân • güçler').setEnabled(true);
     }
   }
 
@@ -390,7 +393,7 @@ export class GameScene extends Phaser.Scene {
     const target = this.cardMergeTarget(v.card, x, y + 50);
     if (target) { this.highlightUnit(target, 0xffd36a); this.dropText.setText(`Birleştir → Seviye ${target.level + 1}`); }
     else if (v.card.kind === 'curse') this.dropText.setText('Lanet oynanamaz');
-    else if (v.card.kind === 'creature' && this.allyCreatures().length >= CONFIG.maxUnits) this.dropText.setText('Alan dolu! Aynı yaratığın üstüne bırak');
+    else if (v.card.kind === 'creature' && this.allyCreatures().length >= this.maxUnits) this.dropText.setText('Alan dolu! Aynı yaratığın üstüne bırak');
     else this.dropText.setText(v.card.kind === 'ritual' ? 'Bırak ve ritüeli başlat!' : 'Bırak ve çağır!');
   }
 
@@ -680,7 +683,7 @@ export class GameScene extends Phaser.Scene {
       const C = CREATURES[card.id], R = RARITIES[card.rarity], st = this.previewStats(card.id, card.rarity, card.level || 1);
       this.setInfo(`${C.name}  •  Sv.${card.level || 1} ${R.name}`,
         `Can ${st.hp}  Hasar ${st.atk}${st.heal ? `  İyileştirme ${st.heal}` : ''}  —  ${C.desc}`, R.color);
-      const full = this.allyCreatures().length >= CONFIG.maxUnits;
+      const full = this.allyCreatures().length >= this.maxUnits;
       const mergeT = this.allyCreatures().find((u) => u.key === card.id && u.level === (card.level || 1) && u.level < MAX_LEVEL);
       if (!full) this.btnB.set('OYNA').setColor(0x2f8a4a).setEnabled(true);
       else if (mergeT) this.btnB.set('BİRLEŞTİR', `Sv.${mergeT.level} → Sv.${mergeT.level + 1}`).setColor(0xb8862a).setEnabled(true);
@@ -728,7 +731,7 @@ export class GameScene extends Phaser.Scene {
     const v = this.hand.selected; if (!v) return;
     const card = v.card;
     if (card.kind === 'curse') { this.select(null); return; }
-    if (card.kind === 'creature' && this.allyCreatures().length >= CONFIG.maxUnits) {
+    if (card.kind === 'creature' && this.allyCreatures().length >= this.maxUnits) {
       const t = this.allyCreatures().find((u) => u.key === card.id && u.level === (card.level || 1) && u.level < MAX_LEVEL);
       if (t) { this.mergeCardInto(v, t); return; }
       const val = this.sacrificeValue(card);
@@ -891,13 +894,15 @@ export class GameScene extends Phaser.Scene {
     if (!this._slots) {
       this._slots = [];
       SLOT_COLS.forEach((x, ci) => SLOT_ROWS.forEach((y, ri) => this._slots.push({ x: x + (ri ? -18 : 0), y, col: ci, unit: null, reserved: false })));
+      // extra slots bought with souls (Mezar Genişliği): a fourth, front column
+      SLOT_ROWS.forEach((y, ri) => this._slots.push({ x: 386 + (ri ? -18 : 0), y, col: 2, unit: null, reserved: false, extra: ri + 1 }));
     }
     return this._slots;
   }
 
   findSlot(role) {
     const want = ROLES[role].col;
-    const free = this.slots().filter((s) => !s.reserved && (!s.unit || s.unit.dead));
+    const free = this.slots().filter((s) => !s.reserved && (!s.unit || s.unit.dead) && (!s.extra || s.extra <= this.army.slots));
     if (!free.length) return null;
     free.sort((a, b) => Math.abs(a.col - want) - Math.abs(b.col - want) || a.y - b.y);
     return free[0];
@@ -963,6 +968,7 @@ export class GameScene extends Phaser.Scene {
     this.drawsThisPrep = 0;
     this.nextComp = waveComposition(this.wave);
     this.rollWeather();
+    this.restockShop();
     this.tutorialHint();
     this.phaseText.setText('Hazırlık');
     this.banner(`DALGA ${this.wave}`, '#d8c8ff', this.wave % 5 === 0 ? 'Engizisyoncu geliyor!' : 'Hazırlık evresi');
@@ -1062,9 +1068,11 @@ export class GameScene extends Phaser.Scene {
     this.state = 'waveEnd';
     sfx.waveClear();
     const bonus = 10 + this.wave * 2;
+    // soul interest: +2 for every 20 banked souls (max +10)
+    const interest = Math.min(10, Math.floor(this.souls / 20) * 2);
     this.score += this.wave * 100;
-    this.banner('DALGA TEMİZLENDİ', '#9dff8a', `+${bonus} ruh`);
-    this.addSouls(bonus, W / 2, 160);
+    this.banner('DALGA TEMİZLENDİ', '#9dff8a', `+${bonus} ruh${interest ? `  (+${interest} faiz)` : ''}`);
+    this.addSouls(bonus + interest, W / 2, 160);
     const healers = this.allyCreatures().filter((u) => u.key === 'banshee' || u.key === 'screamer');
     const pct = CONFIG.waveHealPct + healers.reduce((s, b) => s + CONFIG.bansheeWaveHealPct * RARITIES[b.rarity].mult * levelMult(b.level), 0);
     this.units.filter((u) => u.team === 'ally' && !u.dead).forEach((u, i) => {
@@ -1447,3 +1455,4 @@ GameScene.prototype.evolveFx = function (u) {
   this.floatText(u.x, u.y - 130, u.tier === 2 ? 'EFSANEVİ FORM!' : 'EVRİM!', u.tier === 2 ? '#ffd36a' : '#c8b0ff', 22);
 };
 installAtmosphere(GameScene.prototype);
+installShop(GameScene.prototype, txt, Button);
