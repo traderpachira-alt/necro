@@ -650,11 +650,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------- cards
-  newCard() {
+  // allowUsed: as a last resort also reshuffle this turn's non-ritual discards (rituals stay out so they can't loop)
+  newCard(allowUsed = false) {
+    if (!this.deck.length && !this.grave.length && allowUsed) {
+      const back = this.used.filter((c) => c.kind !== 'ritual');
+      if (back.length) { this.used = this.used.filter((c) => c.kind === 'ritual'); this.grave = back; }
+    }
     if (!this.deck.length) {
       if (!this.grave.length) return null;
       this.deck = Phaser.Utils.Array.Shuffle(this.grave); this.grave = [];
-      this.floatText(46, BTN_Y - 90, 'Mezarlık karıştırıldı', '#c8b0ff', 14);
+      this.floatText(W / 2, 420, 'Mezarlık desteye karıştırıldı', '#c8b0ff', 18);
       sfx.flip();
     }
     const card = this.deck.pop();
@@ -662,14 +667,20 @@ export class GameScene extends Phaser.Scene {
     return card;
   }
 
-  dealCards(n) {
+  dealCards(n, allowUsed = false) {
+    const want = n;
     n = Math.min(n, CONFIG.maxHand - this.hand.size);
     let dealt = 0;
     for (let i = 0; i < n; i++) {
-      const c = this.newCard();
-      if (!c) { if (!dealt) this.floatText(270, 420, 'Destede kart kalmadı', '#ff8a80', 16); break; }
+      const c = this.newCard(allowUsed);
+      if (!c) break;
       this.hand.add(c, i * 140); dealt++;
     }
+    if (dealt < want && this.state === 'prep') {
+      const why = n < want ? `Elin dolu (en fazla ${CONFIG.maxHand} kart)` : 'Destede ve mezarlıkta çekilecek kart kalmadı';
+      this.floatText(W / 2, 420, why, '#ff8a80', 18);
+      this.lastDrawShort = want - dealt;
+    } else this.lastDrawShort = 0;
     n = dealt;
     this.updatePiles();
     if (n > 0) this.time.delayedCall(n * 140 + 300, () => { this.updateHUD(); this.prepInfo(); });
@@ -753,7 +764,13 @@ export class GameScene extends Phaser.Scene {
       }
       this.pendingRarity += left;
     }
-    if (id === 'whisper') this.dealCards(val);
+    if (id === 'whisper') {
+      this.dealCards(val, true);
+      if (this.lastDrawShort > 0) {
+        const refund = this.lastDrawShort * 6;
+        this.time.delayedCall(500, () => { this.addSouls(refund, W / 2, 230); this.floatText(W / 2, 380, `Çekilemeyen kart için +${refund} ruh`, '#9dff8a', 16); });
+      }
+    }
     if (id === 'bonearmor') { this.buff.shield = Math.max(this.buff.shield, val); this.floatText(W / 2, 190, 'Bu dalga: kemik kalkanı', '#9fdcff', 16); }
     if (id === 'harvest') this.addSouls(val, W / 2, 230);
     if (id === 'frenzy') { this.buff.atk = Math.max(this.buff.atk, 1 + val); this.floatText(W / 2, 190, `Bu dalga: +%${Math.round(val * 100)} hasar`, '#ff9a6a', 16); }
