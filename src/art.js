@@ -53,9 +53,13 @@ function leg(p, hx, hy, fx, lift, pal, boot) {
   const kx = (hx + fx) / 2 + 1, ky = (hy + gy) / 2;
   p.line(hx, hy, kx, ky, pal[1], 3);
   p.line(kx, ky, fx, gy - 1, pal[1], 3);
+  // shin highlight + knee joint
+  p.line(kx - 0.6, ky + 0.5, fx - 0.6, gy - 2.5, pal[2], 0.8);
+  p.disc(kx, ky, 1, pal[2]); p.fpx(kx + 0.6, ky + 0.6, pal[0]);
   p.rect(fx - 1, gy - 2, 4, 2, boot[1]);
   p.px(fx + 3, gy - 1, boot[1]);
-  p.px(fx - 1, gy - 2, boot[2]);
+  p.line(fx - 1, gy - 2.6, fx + 2.6, gy - 2.6, boot[2], 0.7);
+  p.line(fx - 1, gy - 0.4, fx + 3.4, gy - 0.4, boot[0], 0.7);
 }
 function torso(p, cx, top, bot, wTop, wBot, pal) {
   for (let y = top; y <= bot; y++) {
@@ -67,6 +71,10 @@ function torso(p, cx, top, bot, wTop, wBot, pal) {
       p.px(x, y, nx < 0.28 ? pal[2] : nx > 0.78 ? pal[0] : pal[1]);
     }
   }
+  // chest seam, collar and lower fold for more readable form
+  p.line(cx + 0.5, top + 1, cx + 0.5, bot - 1, pal[0], 0.6);
+  p.line(cx - wTop / 2 + 1, top + 0.6, cx + wTop / 2 - 1, top + 0.6, pal[2], 0.7);
+  p.line(cx - wBot / 2 + 1, bot - 2.4, cx + wBot / 2 - 1.5, bot - 2.4, pal[0], 0.6);
 }
 function robeSkirt(p, cx, top, pal, f, trim) {
   for (let y = top; y <= 44; y++) {
@@ -87,7 +95,10 @@ function arm(p, sx, sy, ang, len, pal, hand) {
   const ex = sx + Math.cos(ang) * len * 0.5, ey = sy + Math.sin(ang) * len * 0.5 + 0.5;
   p.line(sx, sy, ex, ey, pal[1], 3);
   p.line(ex, ey, hx, hy, pal[1], 2.6);
+  p.line(sx - 0.5, sy - 0.6, ex - 0.5, ey - 0.6, pal[2], 0.8); // upper-arm highlight
+  p.disc(ex, ey, 0.9, pal[2]);
   p.disc(Math.round(hx), Math.round(hy), 1, hand[1]);
+  p.fpx(hx - 0.4, hy - 0.4, hand[2]);
   return [Math.round(hx), Math.round(hy)];
 }
 function cape(p, sx, sy, pal, f, len = 18) {
@@ -125,9 +136,14 @@ const HEADS = {
   skull(p, x, y, f, glow = '#6ff7ff') {
     p.ball(x, y, 4, 4, PAL.bone);
     p.rect(x - 1, y + 3, 5, 2, PAL.bone[1]);
-    p.px(x, y + 4, DARK); p.px(x + 2, y + 4, DARK);
+    // jaw + individual teeth
+    p.line(x - 1, y + 4.6, x + 4, y + 4.6, PAL.bone[0], 0.6);
+    for (let t = 0; t < 4; t++) p.fpx(x - 0.5 + t * 1.2, y + 3.6, DARK);
     p.rect(x + 1, y - 1, 2, 2, DARK); p.glow(x + 2, y - 1, glow); p.halo(x + 2, y - 1, 2, glow, 90);
-    p.px(x + 4, y + 1, DARK); p.px(x - 2, y - 2, PAL.bone[2]);
+    p.fpx(x + 1, y + 1.2, PAL.bone[0]); p.fpx(x + 0.4, y + 1.8, PAL.bone[0]); // cheekbone shadow
+    p.px(x + 4, y + 1, DARK); p.fpx(x + 4.4, y + 1.9, DARK);
+    p.line(x - 2.5, y - 3.2, x - 0.5, y - 1.4, PAL.bone[0], 0.6); // skull crack
+    p.px(x - 2, y - 2, PAL.bone[2]);
   },
   hood(p, x, y, f) {
     p.ball(x, y, 5, 5, PAL.robe);

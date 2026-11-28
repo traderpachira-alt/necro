@@ -77,7 +77,7 @@ export class GameScene extends Phaser.Scene {
     this.mods = newRunMods();
     this.meta = { body: metaLevel('body'), purse: metaLevel('purse'), bone: metaLevel('bone'), rage: metaLevel('rage'), lore: metaLevel('lore'), luck: metaLevel('luck') };
     this.souls = CONFIG.startSouls + this.meta.purse * 10;
-    this.buff = { shield: 0, atk: 1 }; this.enemyMult = 1; this.pendingRarity = 0; this.drawsThisPrep = 0;
+    this.buff = { shield: 0, atk: 1, deathrain: 0 }; this.enemyMult = 1; this.pendingRarity = 0; this.drawsThisPrep = 0;
     this.fusionCharges = 0;
     this.maxUnits = CONFIG.maxUnits;
     this.army = { hp: 0, atk: 0, slots: 0, magic: 0 };
@@ -131,7 +131,8 @@ export class GameScene extends Phaser.Scene {
     const bg = this.add.image(0, -BF, 'bg').setOrigin(0).setDepth(0);
     if (this.lightsOn) {
       bg.setPipeline('Light2D');
-      this.lights.enable().setAmbientColor(0x5c5478);
+      this.lights.enable().setAmbientColor(0x857ca8);
+      this.lights.addLight(150, 260, 520, 0xffe8d0, 0.75); // warm key light over the battlefield
       this.lights.addLight(420, 172 - BF, 700, 0x9aa8ff, 0.9);
       this.staffLight = this.lights.addLight(NECRO_POS.x, NECRO_POS.y - 70, 230, 0x6dff6a, 1.6);
       this.holyLight = this.lights.addLight(540, 420 - BF, 260, 0xffd88a, 0.7);
@@ -440,7 +441,7 @@ export class GameScene extends Phaser.Scene {
       if (act.type === 'fuse') { this.fuseUnits(u, t, act.hybrid); return; }
       if (act.type === 'swap') { this.swapSlots(u, t); return; }
     } else {
-      const slot = this.slots().find((s) => !s.reserved && (!s.unit || s.unit.dead) && Math.hypot(s.x - u.x, s.y - u.y) < 46);
+      const slot = this.usableSlots().find((s) => !s.reserved && (!s.unit || s.unit.dead) && Math.hypot(s.x - u.x, s.y - u.y) < 46);
       if (slot) { u.slot.unit = null; slot.unit = u; u.slot = slot; u.homeX = slot.x; u.homeY = slot.y; }
     }
     u.x = u.homeX; u.y = u.homeY;
@@ -464,7 +465,7 @@ export class GameScene extends Phaser.Scene {
   drawSlots(on) {
     this.slotG.clear();
     if (!on) return;
-    for (const s of this.slots()) this.slotG.lineStyle(2, 0x9b7bd8, 0.5).strokeEllipse(s.x, s.y, 56, 18);
+    for (const s of this.usableSlots()) this.slotG.lineStyle(2, 0x9b7bd8, 0.5).strokeEllipse(s.x, s.y, 56, 18);
   }
   swapSlots(a, b) {
     const sa = a.slot, sb = b.slot;
@@ -551,10 +552,11 @@ export class GameScene extends Phaser.Scene {
     this.hand.layout();
   }
   // keep the creature's card in sync with the unit (level/rarity)
-  syncCard(u) { if (!u.card) u.card = makeCard('creature', u.key, u.rarity, u.level); u.card.level = u.level; u.card.rarity = u.rarity; }
+  syncCard() { /* creature cards are no longer bound to units */ }
   mergeCardInto(v, t) {
     this.hand.remove(v); this.select(null);
     v.busy = true;
+    this.used.push(v.card); this.updatePiles();
     this.tweens.add({
       targets: v.c, x: t.x, y: t.y - 40, scale: 0.2, alpha: 0.2, duration: 320, ease: 'Cubic.easeIn',
       onComplete: () => {
@@ -690,7 +692,7 @@ export class GameScene extends Phaser.Scene {
       else this.btnB.set('FEDA ET', `+${this.sacrificeValue(card)} ruh`).setColor(0x8a2a3a).setEnabled(true);
     } else {
       const D = RITUALS[card.id];
-      this.setInfo(`✦ ${D.name}${(card.level || 1) > 1 ? ' II' : ''}  (Ritüel)`, this.ritualText(card) + ((card.level || 1) === 1 ? ' Aynı ritüelle elde birleştirirsen güçlenir.' : ''), '#c8b0ff');
+      this.setInfo(`✦ ${D.name}${(card.level || 1) > 1 ? ' II' : ''}  (Tek kullanımlık)`, this.ritualText(card) + ((card.level || 1) === 1 ? ' Aynı ritüelle elde birleştirirsen güçlenir.' : ''), '#c8b0ff');
       this.btnB.set('OYNA').setColor(0x2f8a4a).setEnabled(true);
     }
   }
@@ -841,7 +843,7 @@ export class GameScene extends Phaser.Scene {
       v.busy = true;
       this.tweens.add({
         targets: v.c, x: slot.x, y: slot.y - 40, scale: 0.25, angle: 0, alpha: 0.2, duration: 380, ease: 'Cubic.easeIn',
-        onComplete: () => { v.destroy(); this.summon(card, slot); },
+        onComplete: () => { v.destroy(); this.used.push(card); this.updatePiles(); this.summon(card, slot); },
       });
       this.hand.layout();
       return;
@@ -850,7 +852,7 @@ export class GameScene extends Phaser.Scene {
     v.busy = true;
     this.tweens.add({ targets: v.c, x: W / 2, y: 230, scale: 1.35, angle: 0, duration: 320, ease: 'Cubic.easeOut' });
     this.tweens.add({ targets: v.c, alpha: 0, scale: 1.8, delay: 520, duration: 300, onComplete: () => v.destroy() });
-    this.time.delayedCall(420, () => { this.fxUI.setParticleTint(0x9b6bff); this.fxUI.explode(40, W / 2, 230); this.used.push(card); this.applyRitual(card.id, card.level || 1); this.updatePiles(); });
+    this.time.delayedCall(420, () => { this.fxUI.setParticleTint(0x9b6bff); this.fxUI.explode(40, W / 2, 230); this.applyRitual(card.id, card.level || 1); this.updatePiles(); });
     this.hand.layout();
   }
 
@@ -869,13 +871,12 @@ export class GameScene extends Phaser.Scene {
       }
       this.pendingRarity += left;
     }
-    if (id === 'whisper') {
-      this.dealCards(val, true);
-      if (this.lastDrawShort > 0) {
-        const refund = this.lastDrawShort * 6;
-        this.time.delayedCall(500, () => { this.addSouls(refund, W / 2, 230); this.floatText(W / 2, 380, `Çekilemeyen kart için +${refund} ruh`, '#9dff8a', 16); });
-      }
+    if (id === 'rise') {
+      const cands = Phaser.Utils.Array.Shuffle(this.allyCreatures().filter((u) => !u.hidden && u.level < MAX_LEVEL)).slice(0, val);
+      cands.forEach((u, k) => this.time.delayedCall(300 + k * 400, () => { if (u.dead) return; u.setLevel(u.level + 1); u.hp = u.maxHp; this.levelUpFx(u, `SEVİYE ${u.level}!`); }));
+      if (!cands.length) { this.addSouls(20, W / 2, 230); this.notify('Sahada yükselecek yaratık yoktu: +20 ruh', '#9dff8a'); }
     }
+    if (id === 'deathrain') { this.buff.deathrain = Math.max(this.buff.deathrain || 0, val); this.notify(`Bu dalga: düşmanlar %${Math.round(val * 100)} canla eksik gelecek`, '#c8b0ff'); }
     if (id === 'bonearmor') { this.buff.shield = Math.max(this.buff.shield, val); this.floatText(W / 2, 190, 'Bu dalga: kemik kalkanı', '#9fdcff', 16); }
     if (id === 'harvest') this.addSouls(val, W / 2, 230);
     if (id === 'frenzy') { this.buff.atk = Math.max(this.buff.atk, 1 + val); this.floatText(W / 2, 190, `Bu dalga: +%${Math.round(val * 100)} hasar`, '#ff9a6a', 16); }
@@ -900,16 +901,19 @@ export class GameScene extends Phaser.Scene {
     return this._slots;
   }
 
+  // only the base six slots plus the ones bought with Mezar Genişliği
+  usableSlots() { return this.slots().filter((s) => !s.extra || s.extra <= this.army.slots); }
+
   findSlot(role) {
     const want = ROLES[role].col;
-    const free = this.slots().filter((s) => !s.reserved && (!s.unit || s.unit.dead) && (!s.extra || s.extra <= this.army.slots));
+    const free = this.usableSlots().filter((s) => !s.reserved && (!s.unit || s.unit.dead));
     if (!free.length) return null;
     free.sort((a, b) => Math.abs(a.col - want) - Math.abs(b.col - want) || a.y - b.y);
     return free[0];
   }
 
   createAlly(key, rarity, slot, level = 1, card = null) {
-    const u = new Unit(this, { key, team: 'ally', stats: CREATURES[key], rarity, level, x: slot.x, y: slot.y, card: card || makeCard('creature', key, rarity, level) });
+    const u = new Unit(this, { key, team: 'ally', stats: CREATURES[key], rarity, level, x: slot.x, y: slot.y });
     u.homeX = slot.x; u.homeY = slot.y; u.slot = slot;
     slot.unit = u; slot.reserved = false;
     u.sprite.setInteractive({ draggable: true, useHandCursor: true });
@@ -933,7 +937,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.shake(250, 0.004);
     this.time.delayedCall(300, () => {
       const u = this.createAlly(card.id, card.rarity, slot, card.level || 1, card);
-      u.hidden = true; u.rise = 88;
+      u.hidden = true; u.rise = 44 * u.sc * 2;
       u.sprite.anims.stop(); u.sprite.setFrame(9);
       this.fxDirt.explode(26, slot.x, slot.y);
       this.tweens.add({
@@ -1059,6 +1063,10 @@ export class GameScene extends Phaser.Scene {
         stats: { ...E, name: elite ? 'Elit ' + E.name : E.name, souls: (E.souls || 3) * (elite ? 2 : 1), atk: E.atk * (am * ea) / (m * em), heal: (E.heal || 0) * am / m }, mult: m * em, x: W + 30, y });
       if (E.boss && key === 'archangel') { this.cameras.main.flash(500, 255, 240, 200); this.banner('BAŞMELEK', '#ffe890', 'Göklerin cezası iniyor'); sfx.legendary(); }
     }
+    if (this.buff.deathrain && !hostileCreature) {
+      const cut = this.buff.deathrain * (u.base.boss ? 0.5 : 1);
+      u.hp = Math.max(1, Math.round(u.hp * (1 - cut)));
+    }
     u.sprite.setInteractive();
     this.units.push(u);
     return u;
@@ -1083,7 +1091,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.time.delayedCall(300, () => sfx.heal());
     this.grave.push(...this.used); this.used = [];
-    this.buff = { shield: 0, atk: 1 }; this.enemyMult = 1;
+    this.buff = { shield: 0, atk: 1, deathrain: 0 }; this.enemyMult = 1;
     this.projectiles.forEach((p) => this.killProjectile(p)); this.projectiles = [];
     this.updateHUD();
     this.time.delayedCall(2100, () => { if (this.state === 'waveEnd') this.showCardReward(() => { const next = () => this.maybeEvent(() => this.startPrep()); if (this.wave % 2 === 0) this.showBoons(next); else next(); }); });

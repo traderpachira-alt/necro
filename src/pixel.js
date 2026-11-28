@@ -169,6 +169,23 @@ export class Painter {
         if (f !== 0) { const v = shade([src[i], src[i + 1], src[i + 2]], f); c[i] = v[0]; c[i + 1] = v[1]; c[i + 2] = v[2]; }
       }
     }
+    // inner lines: where two clearly different colour regions meet, darken the darker side
+    {
+      const base = new Uint8ClampedArray(c);
+      const lum = (j) => base[j] * 0.3 + base[j + 1] * 0.59 + base[j + 2] * 0.11;
+      for (let y = 0; y < h - 1; y++) for (let x = 0; x < w - 1; x++) {
+        const i = (y * w + x) * 4;
+        if (base[i + 3] < 200 || this.flat[y * w + x]) continue;
+        for (const j of [i + 4, i + w * 4]) {
+          if (base[j + 3] < 200) continue;
+          const dr = base[i] - base[j], dg = base[i + 1] - base[j + 1], db = base[i + 2] - base[j + 2];
+          if (dr * dr + dg * dg + db * db < 70 * 70) continue;
+          const t = lum(i) < lum(j) ? i : j;
+          const v = shade([base[t], base[t + 1], base[t + 2]], -0.32);
+          c[t] = v[0]; c[t + 1] = v[1]; c[t + 2] = v[2];
+        }
+      }
+    }
     if (outline) {
       const base = new Uint8ClampedArray(c);
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {

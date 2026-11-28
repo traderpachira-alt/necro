@@ -58,7 +58,8 @@ export const ENEMIES = {
 
 export const RITUALS = {
   blood: { name: 'Kan Ayini', desc: 'Elindeki bir sonraki yaratık kartı +1 nadirlik kazanır.', glyph: 'drop', w: 3 },
-  whisper: { name: 'Mezar Fısıltısı', desc: '2 kapalı kart çek.', glyph: 'eye', w: 3 },
+  rise: { name: 'Mezar Yükselişi', desc: 'Sahadaki rastgele bir yaratık +1 seviye atlar.', glyph: 'ghost', w: 3 },
+  deathrain: { name: 'Ölüm Yağmuru', desc: 'Bu dalgada gelen tüm düşmanlar canlarının %25\'ini kaybederek başlar.', glyph: 'crack', w: 3 },
   bonearmor: { name: 'Kemik Zırhı', desc: 'Bu dalga tüm yaratıklara canlarının %30\'u kadar kalkan.', glyph: 'shield', w: 3 },
   harvest: { name: 'Ruh Hasadı', desc: '+20 ruh kazan.', glyph: 'soul', w: 3 },
   frenzy: { name: 'Ölü Öfkesi', desc: 'Bu dalga tüm yaratıklar +%25 hasar verir.', glyph: 'fang', w: 3 },
@@ -175,20 +176,21 @@ export function makeCard(kind, id, rarity = 0, level = 1) { return { uid: CARD_U
 export const STARTER_DECK = [
   ['creature', 'guard'], ['creature', 'guard'], ['creature', 'guard'], ['creature', 'butcher'], ['creature', 'butcher'],
   ['creature', 'archer'], ['creature', 'archer'], ['creature', 'golem'], ['creature', 'golem'], ['creature', 'wolf'], ['creature', 'wolf'],
-  ['creature', 'banshee'], ['ritual', 'harvest'], ['ritual', 'bonearmor'], ['ritual', 'whisper'],
+  ['creature', 'banshee'], ['ritual', 'harvest'], ['ritual', 'bonearmor'], ['ritual', 'rise'],
 ];
-export const BASE_RITUALS = ['harvest', 'bonearmor', 'whisper'];
+export const BASE_RITUALS = ['harvest', 'bonearmor', 'rise', 'deathrain'];
 export const LOCKED_RITUALS = { blood: 'unlock_blood', frenzy: 'unlock_frenzy', fusion: 'unlock_fusion' };
 
 // level-dependent ritual numbers (level 2 = merged "II" version)
 export const RITUAL_VALUES = {
-  blood: [1, 2], whisper: [2, 4], bonearmor: [0.3, 0.55], harvest: [20, 45], frenzy: [0.25, 0.5], fusion: [1, 2],
+  blood: [1, 2], rise: [1, 2], deathrain: [0.25, 0.4], bonearmor: [0.4, 0.65], harvest: [30, 65], frenzy: [0.3, 0.6], fusion: [1, 2],
 };
 export function ritualDesc(id, level = 1) {
   const v = RITUAL_VALUES[id][level - 1];
   switch (id) {
     case 'blood': return v === 1 ? 'Elindeki bir yaratık kartı +1 nadirlik kazanır.' : 'Elindeki iki yaratık kartı +1 nadirlik kazanır.';
-    case 'whisper': return `Desteden ${v} kart çek.`;
+    case 'rise': return v === 1 ? 'Sahadaki rastgele bir yaratık +1 seviye atlar.' : 'Sahadaki iki rastgele yaratık +1 seviye atlar.';
+    case 'deathrain': return `Bu dalgada gelen tüm düşmanlar canlarının %${Math.round(v * 100)}'ini kaybederek başlar (boss yarısını).`;
     case 'bonearmor': return `Bu dalga tüm yaratıklara canlarının %${Math.round(v * 100)}'i kadar kalkan.`;
     case 'harvest': return `+${v} ruh kazan.`;
     case 'frenzy': return `Bu dalga tüm yaratıklar +%${Math.round(v * 100)} hasar verir.`;

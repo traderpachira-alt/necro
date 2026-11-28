@@ -18,7 +18,7 @@ export class MenuScene extends Phaser.Scene {
     const bg = this.add.image(0, -BF, 'bg').setOrigin(0);
     if (this.lightsOn) {
       bg.setPipeline('Light2D');
-      this.lights.enable().setAmbientColor(0x3a3450);
+      this.lights.enable().setAmbientColor(0x6a6290);
       this.lights.addLight(420, 172 - BF, 700, 0x9aa8ff, 0.8);
       this.staff = this.lights.addLight(282, 330 - BF, 300, 0x6dff6a, 2);
     }

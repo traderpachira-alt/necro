@@ -38,7 +38,7 @@ export class Unit {
     this.syn = {};
     this.elite = !!opts.elite;
     this.tier = this.team === 'ally' && !this.isNecro ? tierOf(this.level) : 0;
-    this.baseSc = (opts.scale || this.base.scale || 2) / SS;
+    this.baseSc = ((opts.scale || this.base.scale || 2) / SS) * 1.2;
     this.sc = this.baseSc * (this.tier === 2 ? 1.12 : 1);
     this.tex = opts.texKey || (this.tier ? ensureTier(scene, this.key, this.tier) : this.key);
     this.card = opts.card || null;
@@ -147,7 +147,7 @@ export class Unit {
     const x = this.x + this.kx, y = this.y + (this.rise || 0) + lift;
     s.setPosition(x, y).setDepth(this.dragging ? 1100 : this.y);
     if (this.rise > 0) {
-      const vis = Math.max(1, Math.round((44 - this.rise / 2) * SS));
+      const vis = Math.max(1, Math.round((44 - this.rise / (this.sc * SS)) * SS));
       s.setCrop(0, 0, 48 * SS, vis); this.glow.setCrop(0, 0, 48 * SS, vis);
     } else if (s.isCropped) { s.setCrop(); this.glow.setCrop(); }
     const fr = s.frame.name;
@@ -164,7 +164,7 @@ export class Unit {
     if (this.dead || this.hidden) { this.itemIcon?.setVisible(false); return; }
     const big = this.radius > 12;
     const w = this.isNecro ? 56 : this.base.boss ? 60 : big ? 46 : 38, h = this.isNecro ? 6 : 5;
-    const x = Math.round(this.x - w / 2), y = Math.round(this.y - (this.isNecro ? 98 : this.key === 'archangel' ? 118 : big ? 88 : 80)) + (this.dragging ? -14 : 0);
+    const x = Math.round(this.x - w / 2), y = Math.round(this.y - (this.isNecro ? 98 : this.key === 'archangel' ? 118 : big ? 88 : 80) * (this.sc * SS / 2)) + (this.dragging ? -14 : 0);
     g.fillStyle(0x05030a, 0.85).fillRect(x - 1, y - 1, w + 2, h + 2);
     const pct = Math.max(0, this.hp / this.maxHp);
     const col = this.team === 'ally' ? (this.isNecro ? 0x9b6bff : 0x5ee06a) : this.elite ? 0xffa030 : 0xe8434f;

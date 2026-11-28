@@ -160,6 +160,7 @@ export function installShop(proto, txt, Button) {
         const slot = this.findSlot(CREATURES[card.id].role); slot.reserved = true;
         this.summons++;
         this.closeShop();
+        this.used.push(card);
         this.summon(card, slot);
         return `${RARITIES[card.rarity].name} ${CREATURES[card.id].name} topraktan çıkıyor!`;
       }, 0x6a3a7a);
